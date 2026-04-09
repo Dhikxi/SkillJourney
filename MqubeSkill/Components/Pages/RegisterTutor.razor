@@ -1,0 +1,294 @@
+﻿@rendermode InteractiveServer
+@page "/register-tutor"
+
+@using MqubeSkill.Models
+@using MqubeSkill.Services
+@using MqubeSkill.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<MQubeDbContext> DbContextFactory
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<section class="inner-hero">
+    <div class="inner-hero-content">
+        <h1>Teacher Registration</h1>
+        <p>
+            Join our community of inspiring educators,<br />
+            You bring expertise, we provide the platform.
+        </p>
+    </div>
+</section>
+
+<section class="registration-bg py-5">
+    <div class="container">
+
+        <EditForm Model="model" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+
+            <!-- ================= PROFILE INFORMATION ================= -->
+            <div class="form-card">
+                <h5 class="section-title">Profile Information</h5>
+
+                <div class="row g-4">
+
+                    <div class="col-md-6">
+                        <label>Full Name *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.User.FullName" />
+                        <ValidationMessage For="@(() => model.User.FullName)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Email *</label>
+                        <InputText type="email"
+                                   class="form-control"
+                                   @bind-Value="model.User.Email" />
+                        <ValidationMessage For="@(() => model.User.Email)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Password *</label>
+                        <InputText type="password"
+                                   class="form-control"
+                                   @bind-Value="model.User.Password" />
+                        <ValidationMessage For="@(() => model.User.Password)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Qualification *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Tutor.Qualification" />
+                        <ValidationMessage For="@(() => model.Tutor.Qualification)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Subjects *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Tutor.Subjects" />
+                        <ValidationMessage For="@(() => model.Tutor.Subjects)" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label>Experience (Years)</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="model.Tutor.ExperienceYears" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label>Experience (Months)</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="model.Tutor.ExperienceMonths" />
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ================= CONTACT DETAILS ================= -->
+            <div class="form-card mt-4">
+                <h5 class="section-title">Contact Details</h5>
+
+                <div class="row g-4">
+
+                    <div class="col-md-6">
+                        <label>Contact No *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Tutor.ContactNo" />
+                        <ValidationMessage For="@(() => model.Tutor.ContactNo)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>WhatsApp No *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Tutor.WhatsAppNo" />
+                        <ValidationMessage For="@(() => model.Tutor.WhatsAppNo)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Skype Id</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Tutor.SkypeId" />
+                    </div>
+
+                    <div class="col-12">
+                        <label>Address</label>
+                        <InputTextArea class="form-control"
+                                       rows="3"
+                                       @bind-Value="model.Tutor.Address" />
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ================= AVAILABILITY ================= -->
+            <div class="form-card mt-4">
+                <h5 class="section-title">Availability & Equipment</h5>
+
+                <div class="row g-4">
+
+                    <div class="col-md-6">
+                        <label>Working Hours *</label><br />
+
+                        <br />
+
+                        <label>Start Time</label>
+                        <input type="time" class="form-control"
+                               @bind="model.Tutor.AvailableStartTime" />
+
+                        <label class="mt-2">End Time</label>
+                        <input type="time" class="form-control"
+                               @bind="model.Tutor.AvailableEndTime" />
+                        <InputRadioGroup @bind-Value="model.Tutor.WorkingHours" TValue="string">
+
+                            <div class="form-check">
+                                <InputRadio TValue="string" Value="@("FullTime")" />
+                                <label>Full Time</label>
+                            </div>
+
+                            <div class="form-check">
+                                <InputRadio TValue="string" Value="@("PartTime")" />
+                                <label>Part Time</label>
+                            </div>
+
+                        </InputRadioGroup>
+                        <ValidationMessage For="@(() => model.Tutor.WorkingHours)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Ready Early Morning?</label><br />
+                        <InputCheckbox @bind-Value="model.Tutor.ReadyEarlyMorning" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>High Speed Internet?</label><br />
+                        <InputCheckbox @bind-Value="model.Tutor.HighSpeedInternet" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Has Digital Pen?</label><br />
+                        <InputCheckbox @bind-Value="model.Tutor.HasDigitalPen" />
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ================= ATTACHMENTS ================= -->
+            <div class="form-card mt-4">
+                <h5 class="section-title">Attachments</h5>
+
+                <div class="row g-4">
+
+                    <div class="col-md-4">
+                        <label>Resume *</label>
+                        <InputText class="form-control"
+                                   placeholder="resume.pdf"
+                                   @bind-Value="model.Tutor.ResumePath" />
+                        <ValidationMessage For="@(() => model.Tutor.ResumePath)" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Identity Proof *</label>
+                        <InputText class="form-control"
+                                   placeholder="aadhaar.pdf"
+                                   @bind-Value="model.Tutor.IdentityProofPath" />
+                        <ValidationMessage For="@(() => model.Tutor.IdentityProofPath)" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label>Highest Degree *</label>
+                        <InputText class="form-control"
+                                   placeholder="degree.pdf"
+                                   @bind-Value="model.Tutor.DegreePath" />
+                        <ValidationMessage For="@(() => model.Tutor.DegreePath)" />
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ================= HEAR ABOUT US ================= -->
+            <div class="form-card mt-4">
+                <h5 class="section-title">How Did You Hear About Us?</h5>
+
+                <InputRadioGroup @bind-Value="model.Tutor.HearAboutUs" TValue="string">
+
+                    <div class="form-check">
+                        <InputRadio TValue="string" Value="@("NewsPaper")" />
+                        <label>News Paper</label>
+                    </div>
+
+                    <div class="form-check">
+                        <InputRadio TValue="string" Value="@("SearchEngine")" />
+                        <label>Search Engine</label>
+                    </div>
+
+                    <div class="form-check">
+                        <InputRadio TValue="string" Value="@("SocialMedia")" />
+                        <label>Social Media</label>
+                    </div>
+
+                    <div class="form-check">
+                        <InputRadio TValue="string" Value="@("Others")" />
+                        <label>Others</label>
+                    </div>
+
+                </InputRadioGroup>
+
+                <ValidationMessage For="@(() => model.Tutor.HearAboutUs)" />
+            </div>
+
+            <!-- ================= BUTTON ================= -->
+            <div class="text-center mt-4">
+                <button type="submit" class="btn btn-warning">
+                    Submit
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="alert alert-success mt-3 text-center">
+                    @message
+                </div>
+            }
+
+        </EditForm>
+
+    </div>
+</section>
+
+@code {
+
+    private RegisterTutorViewModel model = new();
+    private string? message;
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            model.User.Role = "Tutor";
+
+            var createdUser = await AuthService.Register(model.User);
+
+            if (createdUser == null)
+            {
+                message = "User already exists!";
+                return;
+            }
+
+            model.Tutor.UserId = createdUser.UserId;
+            model.Tutor.IsApproved = false;
+            model.Tutor.Availability = model.Tutor.WorkingHours ?? "";
+
+            using var db = DbContextFactory.CreateDbContext();
+            db.Tutors.Add(model.Tutor);
+            await db.SaveChangesAsync();
+
+            message = "Tutor Registered Successfully!";
+            await Task.Delay(1000);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            message = ex.InnerException?.Message ?? ex.Message;
+        }
+    }
+}

@@ -1,0 +1,955 @@
+﻿@page "/chat"
+@page "/chat/{EnrollmentId:int}"
+@rendermode InteractiveServer
+@using MqubeSkill.Models
+@using MqubeSkill.Services
+@inject AuthService AuthService
+@inject ChatService ChatService
+@inject NavigationManager Navigation
+
+<PageTitle>Chat</PageTitle>
+
+<div class="chat-page-bg">
+    <div class="chat-topbar">
+        <a href="javascript:history.back()" class="back-btn">← Back to Dashboard</a>
+        <h5 class="chat-title">💬 My Classes</h5>
+        <div></div>
+    </div>
+    <h4>My Classes</h4>
+
+@if (sessions == null || sessions.Count == 0)
+{
+    <p>No classes booked yet</p>
+}
+else
+{
+    @foreach (var s in sessions)
+    {
+        <div class="card p-2 m-2">
+            <b>@s.ScheduledAt.ToString("dd MMM yyyy hh:mm tt")</b>
+        </div>
+    }
+}
+    <div class="chat-body">
+        @if (currentUser == null)
+        {
+            <div class="text-center mt-5">
+                <p style="color:white">Please <a href="/login">login</a> to access chat.</p>
+            </div>
+        }
+        else if (enrollments == null)
+        {
+            <div class="chat-loading">
+                <div class="spinner"></div>
+                <p>Loading your classes...</p>
+            </div>
+        }
+        else if (enrollments.Count == 0)
+        {
+            <div class="chat-empty-state">
+                <div class="empty-icon">💬</div>
+                <h5>No Active Classes Found</h5>
+                <p>You don't have any active enrollments yet.</p>
+                <a href="@(currentUser.Role == "Tutor" ? "/tutor-dashboard" : "/student-dashboard")"
+                   class="btn-back-dash">Go to Dashboard</a>
+            </div>
+        }
+        else
+        {
+            <div class="chat-layout">
+
+                <!-- Sidebar -->
+                <div class="chat-sidebar">
+                    <div class="sidebar-header">
+                        <span class="sidebar-icon">🎓</span>
+                        <h6>My Classes</h6>
+                    </div>
+                    <div class="sidebar-list">
+                        @foreach (var e in enrollments)
+                        {
+                            var isActive = e.EnrollmentId == EnrollmentId;
+                            var name = currentUser.Role == "Tutor"
+                                ? e.Student?.User?.FullName
+                                : e.Tutor?.User?.FullName;
+                            var subject = e.Subject?.SubjectName ?? "Subject";
+                            var initial = name != null && name.Length > 0 ? name[0].ToString().ToUpper() : "?";
+                            <div class="sidebar-item @(isActive ? "active" : "")"
+                                 @onclick="() => SelectEnrollment(e.EnrollmentId)">
+                                <div class="si-avatar">@initial</div>
+                                <div class="si-info">
+                                    <div class="si-name">@name</div>
+                                    <div class="si-subject">@subject</div>
+                                </div>
+                                @if (isActive) { <div class="si-dot"></div> }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Main Area -->
+                <div class="chat-main">
+                    @if (selectedEnrollment == null)
+                    {
+                        <div class="chat-empty">
+                            <div class="empty-icon">👈</div>
+                            <p>Select a class to start</p>
+                        </div>
+                    }
+                    else
+                    {
+                        var otherName = currentUser.Role == "Tutor"
+                            ? selectedEnrollment.Student?.User?.FullName
+                            : selectedEnrollment.Tutor?.User?.FullName;
+                        var otherInitial = otherName != null && otherName.Length > 0
+                            ? otherName[0].ToString().ToUpper() : "?";
+
+                        <!-- Header -->
+                        <div class="chat-header">
+                            <div class="ch-avatar">@otherInitial</div>
+                            <div class="ch-info">
+                                <div class="ch-name">@otherName</div>
+                                <div class="ch-subject">📚 @selectedEnrollment.Subject?.SubjectName</div>
+                            </div>
+                            <div class="ch-badge">Active</div>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="tab-bar">
+                            <button class="tab-btn @(activeTab == "chat" ? "active" : "")"
+                                    @onclick='() => SwitchTab("chat")'>💬 Chat</button>
+                            <button class="tab-btn @(activeTab == "attendance" ? "active" : "")"
+                                    @onclick='() => SwitchTab("attendance")'>📅 Attendance</button>
+                            <button class="tab-btn @(activeTab == "homework" ? "active" : "")"
+                                    @onclick='() => SwitchTab("homework")'>📝 Homework</button>
+                            <button class="tab-btn @(activeTab == "progress" ? "active" : "")"
+                                    @onclick='() => SwitchTab("progress")'>📊 Progress</button>
+                        </div>
+
+                        <!-- ══ CHAT TAB ══ -->
+                        @if (activeTab == "chat")
+                        {
+                            <div class="chat-messages" id="chatBox">
+                                @if (messages == null)
+                                {
+                                    <div class="chat-loading"><p>Loading messages...</p></div>
+                                }
+                                else if (messages.Count == 0)
+                                {
+                                    <div class="msg-empty">
+                                        <div class="msg-empty-icon">👋</div>
+                                        <p>No messages yet. Say hello!</p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var msg in messages)
+                                    {
+                                        var isMine = msg.SenderUserId == currentUser.UserId;
+                                        <div class="msg-row @(isMine ? "mine" : "theirs")">
+                                            @if (!isMine) { <div class="msg-avatar">@otherInitial</div> }
+                                            <div class="msg-bubble @(isMine ? "bubble-mine" : "bubble-theirs") @(msg.MessageType != "Text" ? "bubble-special" : "")">
+                                                @if (msg.MessageType == "ClassLink")
+                                                {
+                                                    <div class="msg-type-label">📅 Class Link</div>
+                                                    <a href="@msg.Content" target="_blank" class="join-btn">🔗 Join Class</a>
+                                                }
+                                                else if (msg.MessageType == "Homework")
+                                                {
+                                                    <div class="msg-type-label">📝 Homework</div>
+                                                    <div class="msg-text">@msg.Content</div>
+                                                }
+                                                else if (msg.MessageType == "Assessment")
+                                                {
+                                                    <div class="msg-type-label">📊 Assessment</div>
+                                                    <div class="msg-text">@msg.Content</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="msg-text">@msg.Content</div>
+                                                }
+                                                <div class="msg-time">@msg.SentAt.ToString("hh:mm tt")</div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            <div class="chat-input-area">
+                                @if (currentUser.Role == "Tutor" && showLinkInput)
+                                {
+                                    <div class="link-input-bar">
+                                        <span>📅</span>
+                                        <input class="form-control form-control-sm"
+                                               placeholder="Paste Zoom / Meet link..."
+                                               @bind="classLinkInput" />
+                                        <button class="btn-send-link" @onclick="SendClassLink">Send</button>
+                                        <button class="btn-cancel" @onclick='() => showLinkInput = false'>✕</button>
+                                    </div>
+                                }
+                                <div class="input-row">
+                                    @if (currentUser.Role == "Tutor")
+                                    {
+                                        <button class="btn-icon" @onclick='() => showLinkInput = !showLinkInput'>📅</button>
+                                    }
+                                    <input class="msg-input" placeholder="Type a message..."
+                                           @bind="newMessage" @bind:event="oninput" @onkeydown="HandleKey" />
+                                    <button class="btn-send" @onclick="SendText">Send ➤</button>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- ══ ATTENDANCE TAB ══ -->
+                        @if (activeTab == "attendance")
+                        {
+                            <div class="tab-content">
+
+                                @if (currentUser.Role == "Tutor")
+                                {
+                                    <!-- Create Session -->
+                                    <div class="section-card">
+                                        <h6 class="section-title">📅 Create New Session</h6>
+                                        <div class="form-row">
+                                            <input class="tab-input" placeholder="Session title (e.g. Chapter 3)"
+                                                   @bind="newSessionTitle" />
+                                            <input class="tab-input" type="datetime-local"
+                                                   @bind="newSessionDate" />
+                                            <input class="tab-input" placeholder="Class link (optional)"
+                                                   @bind="newSessionLink" />
+                                            <input class="tab-input" type="number" placeholder="Duration (minutes)" 
+                                                   @bind="durationMinutes" />
+                                            <button class="btn-primary-tab" @onclick="CreateSession">
+                                                + Create Session
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Sessions List -->
+                                <div class="section-card">
+                                    <h6 class="section-title">📋 All Sessions</h6>
+                                    @if (sessions == null || sessions.Count == 0)
+                                    {
+                                        <p class="empty-text">No sessions created yet.</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var session in sessions)
+                                        {
+                                            <div class="session-row">
+                                                <div class="session-info">
+                                                    <div class="session-title">@session.Title</div>
+                                                    <div class="session-date">
+                                                        📅 @session.ScheduledAt.ToString("dd MMM yyyy")
+
+                                                        <br />
+
+                                                        🕒 @session.ScheduledAt.ToString("hh:mm tt")
+                                                        -
+                                                        @session.ScheduledAt.AddMinutes(session.DurationMinutes).ToString("hh:mm tt")
+
+                                                        <br />
+
+                                                        ⏱ Duration: @session.DurationMinutes mins
+                                                    </div>
+                                                </div>
+                                                <span class="status-badge @(session.Status == "Completed" ? "badge-green" : "badge-blue")">
+                                                    @session.Status
+                                                </span>
+                                                @if (currentUser.Role == "Tutor" && session.Status == "Upcoming")
+                                                {
+                                                    <div class="att-actions">
+                                                        <button class="btn-present"
+                                                                @onclick='() => MarkAtt(session.ClassSessionId, "Present")'>
+                                                            ✓ Present
+                                                        </button>
+                                                        <button class="btn-absent"
+                                                                @onclick='() => MarkAtt(session.ClassSessionId, "Absent")'>
+                                                            ✗ Absent
+                                                        </button>
+                                                        <button class="btn-complete"
+                                                                @onclick="() => CompleteSession(session.ClassSessionId)">
+                                                            ✔ Done
+                                                        </button>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(session.ClassLink))
+                                                {
+                                                    <a href="@session.ClassLink" target="_blank" class="join-btn-sm">Join</a>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                <!-- Attendance Records -->
+                                @if (attendances != null && attendances.Count > 0)
+                                {
+                                    <div class="section-card">
+                                        <h6 class="section-title">✅ Attendance Records</h6>
+                                        @foreach (var att in attendances)
+                                        {
+                                            <div class="att-record">
+                                                <span class="att-session">@att.ClassSession?.Title</span>
+                                                <span class="att-date">@att.ClassSession?.ScheduledAt.ToString("dd MMM")</span>
+                                                <span class="status-badge @(att.Status == "Present" ? "badge-green" : att.Status == "Late" ? "badge-amber" : "badge-red")">
+                                                    @att.Status
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- ══ HOMEWORK TAB ══ -->
+                        @if (activeTab == "homework")
+                        {
+                            <div class="tab-content">
+
+                                @if (currentUser.Role == "Tutor")
+                                {
+                                    <div class="section-card">
+                                        <h6 class="section-title">📝 Assign Homework</h6>
+                                        <div class="form-col">
+                                            <input class="tab-input" placeholder="Homework title"
+                                                   @bind="hwTitle" />
+                                            <textarea class="tab-input" rows="2"
+                                                      placeholder="Description (optional)"
+                                                      @bind="hwDescription"></textarea>
+                                            <input class="tab-input" type="date"
+                                                   @bind="hwDueDate" />
+                                            <button class="btn-primary-tab" @onclick="AssignHomework">
+                                                + Assign
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="section-card">
+                                    <h6 class="section-title">📋 Homework List</h6>
+                                    @if (homeworks == null || homeworks.Count == 0)
+                                    {
+                                        <p class="empty-text">No homework assigned yet.</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var hw in homeworks)
+                                        {
+                                            
+                                                <div class="hw-row">
+                                                    <div class="hw-info">
+                                                        <div class="hw-title">@hw.Title</div>
+
+                                                        @if (!string.IsNullOrEmpty(hw.Description))
+                                                        {
+                                                            <div class="hw-desc">@hw.Description</div>
+                                                        }
+
+                                                        @if (hw.DueDate.HasValue)
+                                                        {
+                                                            <div class="hw-due">Due: @hw.DueDate.Value.ToString("dd MMM yyyy")</div>
+                                                        }
+
+                                                        @* ✅ Student Submission *@
+                                                        @if (!string.IsNullOrEmpty(hw.SubmissionText))
+                                                        {
+                                                            <div class="hw-desc">🧑‍🎓 Answer: @hw.SubmissionText</div>
+                                                        }
+
+                                                        @if (!string.IsNullOrEmpty(hw.FilePath))
+                                                        {
+                                                            <a href="@hw.FilePath" target="_blank">📎 View File</a>
+                                                        }
+
+                                                        @if (!string.IsNullOrEmpty(hw.TutorRemarks))
+                                                        {
+                                                            <div class="hw-remarks">💬 @hw.TutorRemarks</div>
+                                                        }
+                                                    </div>
+                                               
+                                                <div class="hw-right">
+                                                    <span class="status-badge @(hw.Status == "Submitted" ? "badge-blue" : hw.Status == "Reviewed" ? "badge-green" : "badge-amber")">
+                                                        @hw.Status
+                                                    </span>
+
+                                                    @if (currentUser.Role == "Student" && hw.Status == "Assigned")
+                                                        {
+                                                            <textarea class="tab-input"
+                                                                      placeholder="Write answer or paste link"
+                                                                      value="@(submissionTexts.ContainsKey(hw.HomeworkId) ? submissionTexts[hw.HomeworkId] : "")"
+@oninput="e => submissionTexts[hw.HomeworkId] = e.Value?.ToString()"></textarea>
+
+                                                            <InputFile OnChange="(e) => HandleFileUpload(e, hw.HomeworkId)" />
+
+                                                            <button class="btn-submit-hw"
+                                                                    @onclick="() => SubmitHomework(hw.HomeworkId)">
+                                                                Submit
+                                                            </button>
+                                                        }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- ══ PROGRESS TAB ══ -->
+                        @if (activeTab == "progress")
+                        {
+                            <div class="tab-content">
+
+                                <!-- Stats Cards -->
+                                <div class="stats-grid">
+                                    <div class="stat-card">
+                                        <div class="stat-icon">📅</div>
+                                        <div class="stat-value">@attendancePercent%</div>
+                                        <div class="stat-label">Attendance</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">📝</div>
+                                        <div class="stat-value">@submittedHw / @totalHw</div>
+                                        <div class="stat-label">Homework Done</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">📊</div>
+                                        <div class="stat-value">@avgMarks%</div>
+                                        <div class="stat-label">Avg Score</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">🎯</div>
+                                        <div class="stat-value">@totalSessions</div>
+                                        <div class="stat-label">Total Classes</div>
+                                    </div>
+                                </div>
+
+                                <!-- Assessments -->
+                                <div class="section-card">
+                                    <h6 class="section-title">📊 Assessments</h6>
+
+                                    @if (currentUser.Role == "Tutor")
+                                    {
+                                        <div class="form-row mb-3">
+                                            <input class="tab-input" placeholder="Assessment title"
+                                                   @bind="assessTitle" />
+                                            <input class="tab-input" type="number" placeholder="Marks obtained"
+                                                   @bind="assessMarks" />
+                                            <input class="tab-input" type="number" placeholder="Total marks"
+                                                   @bind="assessTotal" />
+                                            <input class="tab-input" placeholder="Remarks (optional)"
+                                                   @bind="assessRemarks" />
+                                            <button class="btn-primary-tab" @onclick="AddAssessment">
+                                                + Add
+                                            </button>
+                                        </div>
+                                    }
+
+                                    @if (assessments == null || assessments.Count == 0)
+                                    {
+                                        <p class="empty-text">No assessments recorded yet.</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var a in assessments)
+                                        {
+                                            var pct = a.TotalMarks > 0 ? (a.MarksObtained * 100 / a.TotalMarks) : 0;
+                                            <div class="assess-row">
+                                                <div class="assess-info">
+                                                    <div class="assess-title">@a.Title</div>
+                                                    <div class="assess-date">@a.TakenAt.ToString("dd MMM yyyy")</div>
+                                                    @if (!string.IsNullOrEmpty(a.Remarks))
+                                                    {
+                                                        <div class="assess-remarks">@a.Remarks</div>
+                                                    }
+                                                </div>
+                                                <div class="assess-score">
+                                                    <div class="score-num">@a.MarksObtained / @a.TotalMarks</div>
+                                                    <div class="score-bar">
+                                                        <div class="score-fill @(pct >= 75 ? "fill-green" : pct >= 50 ? "fill-amber" : "fill-red")"
+                                                             style="width: @pct%"></div>
+                                                    </div>
+                                                    <div class="score-pct">@pct%</div>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .chat-page-bg {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        display: flex;
+        flex-direction: column;
+        padding-top: 5px;
+    }
+
+    .chat-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 30px 15px;
+        background: rgba(255,255,255,0.04);
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        padding-top: 110px;
+    }
+
+    .back-btn { color: #94a3b8; text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+    .back-btn:hover { color: #facc15; }
+    .chat-title { color: white; font-weight: 700; margin: 0; font-size: 18px; letter-spacing: 0.5px; }
+
+    .chat-body { flex: 1; padding: 10px 32px; display: flex; flex-direction: column; }
+
+    .chat-layout {
+        display: flex; flex: 1;
+        height: calc(100vh - 140px);
+        border-radius: 20px; overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .chat-sidebar {
+        width: 280px; min-width: 280px;
+        background: #0f172a; display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .sidebar-header { padding: 20px 18px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; gap: 10px; }
+    .sidebar-header h6 { color: white; margin: 0; font-weight: 700; font-size: 15px; }
+    .sidebar-icon { font-size: 18px; }
+    .sidebar-list { overflow-y: auto; flex: 1; }
+    .sidebar-list::-webkit-scrollbar { width: 4px; }
+    .sidebar-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+    .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; position: relative; }
+    .sidebar-item:hover { background: rgba(255,255,255,0.05); }
+    .sidebar-item.active { background: rgba(79,70,229,0.2); border-left: 3px solid #4f46e5; }
+
+    .si-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .si-name { font-weight: 600; font-size: 14px; color: #f1f5f9; }
+    .si-subject { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .si-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-left: auto; flex-shrink: 0; }
+
+    .chat-main { flex: 1; display: flex; flex-direction: column; background: #1e293b; overflow: hidden; }
+
+    .chat-header { padding: 16px 24px; background: #0f172a; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; gap: 14px; }
+    .ch-avatar { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #059669, #10b981); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0; }
+    .ch-name { font-weight: 700; font-size: 15px; color: #f1f5f9; }
+    .ch-subject { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .ch-badge { margin-left: auto; background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 600; }
+
+    /* ── Tabs ── */
+    .tab-bar { display: flex; background: #0a0f1e; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .tab-btn { flex: 1; padding: 12px 8px; background: transparent; border: none; color: #64748b; font-size: 13px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.03); }
+    .tab-btn.active { color: #4f46e5; border-bottom: 2px solid #4f46e5; background: rgba(79,70,229,0.08); }
+
+    /* ── Tab Content ── */
+    .tab-content { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+    .section-card { background: #0f172a; border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.07); }
+    .section-title { color: #f1f5f9; font-size: 13px; font-weight: 700; margin: 0 0 12px 0; }
+    .empty-text { color: #475569; font-size: 13px; text-align: center; padding: 20px 0; }
+
+    .form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+    .form-col { display: flex; flex-direction: column; gap: 8px; }
+
+    .tab-input { background: #1e293b; border: 1px solid #334155; color: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; flex: 1; min-width: 140px; }
+    .tab-input::placeholder { color: #475569; }
+    .tab-input:focus { border-color: #4f46e5; }
+    .tab-input-sm { background: #1e293b; border: 1px solid #334155; color: #f1f5f9; border-radius: 8px; padding: 5px 10px; font-size: 12px; outline: none; width: 120px; }
+
+    .btn-primary-tab { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: white; border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-primary-tab:hover { opacity: 0.88; }
+
+    /* Sessions */
+    .session-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap; }
+    .session-info { flex: 1; min-width: 140px; }
+    .session-title { color: #f1f5f9; font-size: 13px; font-weight: 600; }
+    .session-date { color: #64748b; font-size: 11px; margin-top: 2px; }
+
+    .att-actions { display: flex; gap: 6px; }
+    .btn-present { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .btn-absent { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .btn-complete { background: rgba(79,70,229,0.15); color: #818cf8; border: 1px solid rgba(79,70,229,0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .join-btn-sm { background: linear-gradient(135deg, #059669, #10b981); color: white !important; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 600; text-decoration: none !important; }
+
+    /* Attendance Records */
+    .att-record { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .att-session { color: #f1f5f9; font-size: 13px; flex: 1; }
+    .att-date { color: #64748b; font-size: 11px; }
+
+    /* Status Badges */
+    .status-badge { border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .badge-blue { background: rgba(79,70,229,0.15); color: #818cf8; border: 1px solid rgba(79,70,229,0.3); }
+    .badge-amber { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+    .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+
+    /* Homework */
+    .hw-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .hw-info { flex: 1; }
+    .hw-title { color: #f1f5f9; font-size: 13px; font-weight: 600; }
+    .hw-desc { color: #94a3b8; font-size: 12px; margin-top: 3px; }
+    .hw-due { color: #fbbf24; font-size: 11px; margin-top: 3px; }
+    .hw-remarks { color: #22c55e; font-size: 11px; margin-top: 3px; }
+    .hw-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .btn-submit-hw { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-review-hw { background: linear-gradient(135deg, #059669, #10b981); color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+    /* Progress Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat-card { background: #0f172a; border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.07); text-align: center; }
+    .stat-icon { font-size: 22px; margin-bottom: 8px; }
+    .stat-value { color: #f1f5f9; font-size: 20px; font-weight: 700; }
+    .stat-label { color: #64748b; font-size: 11px; margin-top: 4px; }
+
+    /* Assessment */
+    .assess-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .assess-info { flex: 1; }
+    .assess-title { color: #f1f5f9; font-size: 13px; font-weight: 600; }
+    .assess-date { color: #64748b; font-size: 11px; margin-top: 2px; }
+    .assess-remarks { color: #94a3b8; font-size: 11px; margin-top: 2px; }
+    .assess-score { text-align: right; min-width: 100px; }
+    .score-num { color: #f1f5f9; font-size: 13px; font-weight: 600; }
+    .score-bar { background: #1e293b; border-radius: 4px; height: 6px; margin: 4px 0; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .fill-green { background: #22c55e; }
+    .fill-amber { background: #fbbf24; }
+    .fill-red { background: #ef4444; }
+    .score-pct { color: #64748b; font-size: 11px; }
+
+    /* Messages */
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; background: #1e293b; }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+    .msg-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #475569; gap: 8px; margin-top: 60px; }
+    .msg-empty-icon { font-size: 40px; }
+
+    .msg-row { display: flex; align-items: flex-end; gap: 8px; }
+    .msg-row.mine { justify-content: flex-end; }
+    .msg-row.theirs { justify-content: flex-start; }
+
+    .msg-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+    .msg-bubble { max-width: 60%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.55; word-break: break-word; }
+    .bubble-mine { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: white; border-bottom-right-radius: 4px; }
+    .bubble-theirs { background: #0f172a; color: #e2e8f0; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.07); }
+    .bubble-special { background: rgba(250,204,21,0.08) !important; border: 1.5px solid rgba(250,204,21,0.3) !important; color: #f1f5f9 !important; border-bottom-left-radius: 4px; }
+
+    .msg-type-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #facc15; margin-bottom: 6px; }
+    .msg-text { color: inherit; }
+    .msg-time { font-size: 10px; margin-top: 6px; text-align: right; opacity: 0.5; }
+
+    .join-btn { display: inline-block; margin-top: 6px; padding: 8px 18px; background: linear-gradient(135deg, #059669, #10b981); color: white !important; border-radius: 10px; font-size: 13px; font-weight: 600; text-decoration: none !important; }
+
+    .chat-input-area { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07); background: #0f172a; }
+    .link-input-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(250,204,21,0.06); border-radius: 12px; border: 1px solid rgba(250,204,21,0.2); }
+    .link-input-bar .form-control { background: #1e293b; border: 1px solid #334155; color: white; border-radius: 8px; font-size: 13px; }
+    .btn-send-link { background: linear-gradient(135deg, #059669, #10b981); color: white; border: none; border-radius: 8px; padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-cancel { background: rgba(255,255,255,0.07); color: #94a3b8; border: none; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+
+    .input-row { display: flex; align-items: center; gap: 10px; background: #1e293b; border-radius: 30px; padding: 6px 6px 6px 16px; border: 1.5px solid #334155; transition: border-color 0.2s; }
+    .input-row:focus-within { border-color: #4f46e5; }
+    .msg-input { flex: 1; background: transparent; border: none; outline: none; color: #f1f5f9; font-size: 14px; padding: 6px 0; }
+    .msg-input::placeholder { color: #475569; }
+    .btn-icon { background: rgba(255,255,255,0.07); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+    .btn-send { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: white; border: none; border-radius: 24px; padding: 8px 22px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+
+    .chat-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; gap: 12px; text-align: center; }
+    .chat-empty-state h5 { color: white; }
+    .chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #475569; gap: 10px; }
+    .empty-icon { font-size: 48px; }
+    .btn-back-dash { margin-top: 8px; padding: 10px 24px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 14px; }
+
+    .chat-loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; gap: 12px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #334155; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    @@media (max-width: 600px) {
+        .chat-sidebar { width: 200px; min-width: 200px; }
+        .msg-bubble { max-width: 80%; }
+        .chat-body { padding: 12px; }
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+
+@code {
+    List<ClassSession> sessions = new();
+    int durationMinutes = 60;
+    Dictionary<int, string> submissionTexts = new();
+Dictionary<int, IBrowserFile> uploadedFiles = new();
+    
+
+    [Parameter] public int EnrollmentId { get; set; }
+
+    private User? currentUser;
+    private List<Enrollment>? enrollments;
+    private Enrollment? selectedEnrollment;
+    private List<ChatMessage>? messages;
+    private List<Attendance>? attendances;
+    private List<Homework>? homeworks;
+    private List<Assessment>? assessments;
+
+    private string activeTab = "chat";
+    private string newMessage = "";
+    private string classLinkInput = "";
+    private bool showLinkInput = false;
+
+    // Session fields
+    private string newSessionTitle = "";
+    private string newSessionLink = "";
+    private DateTime newSessionDate = DateTime.Now.AddDays(1);
+
+    // Homework fields
+    private string hwTitle = "";
+    private string hwDescription = "";
+    private DateTime? hwDueDate;
+    private string hwRemarks = "";
+
+    // Assessment fields
+    private string assessTitle = "";
+    private int assessMarks = 0;
+    private int assessTotal = 100;
+    private string assessRemarks = "";
+
+    // Progress stats
+    private int attendancePercent = 0;
+    private int submittedHw = 0;
+    private int totalHw = 0;
+    private int avgMarks = 0;
+    private int totalSessions = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+        var userId = AuthService.LoggedInUserId;
+        if (userId == 0) { Navigation.NavigateTo("/login"); return; }
+
+        currentUser = await ChatService.GetUserAsync(userId);
+        if (currentUser == null) return;
+
+        enrollments = await ChatService.GetEnrollmentsForUserAsync(currentUser.UserId, currentUser.Role!);
+
+        if (EnrollmentId > 0)
+            await SelectEnrollment(EnrollmentId);
+        else if (enrollments.Count > 0)
+            await SelectEnrollment(enrollments[0].EnrollmentId);
+
+        _ = Task.Run(async () =>
+{
+    while (true)
+    {
+        await Task.Delay(3000); // every 3 seconds
+
+        if (EnrollmentId > 0)
+        {
+            messages = await ChatService.GetMessagesAsync(EnrollmentId);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+});
+    }
+
+    private async Task SelectEnrollment(int enrollmentId)
+    {
+        EnrollmentId = enrollmentId;
+        selectedEnrollment = await ChatService.GetEnrollmentAsync(enrollmentId);
+        sessions = await ChatService.GetSessionsAsync(enrollmentId);
+        activeTab = "chat";
+        await LoadTabData();
+        StateHasChanged();
+    }
+
+    private async Task SwitchTab(string tab)
+    {
+        activeTab = tab;
+        await LoadTabData();
+        StateHasChanged();
+    }
+
+    private async Task LoadTabData()
+    {
+        if (activeTab == "chat")
+            messages = await ChatService.GetMessagesAsync(EnrollmentId);
+
+        if (activeTab == "attendance")
+        {
+            sessions = await ChatService.GetSessionsAsync(EnrollmentId);
+            attendances = await ChatService.GetAttendancesAsync(EnrollmentId);
+        }
+
+        if (activeTab == "homework")
+            homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+
+        if (activeTab == "progress")
+        {
+            sessions = await ChatService.GetSessionsAsync(EnrollmentId);
+            attendances = await ChatService.GetAttendancesAsync(EnrollmentId);
+            homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+            assessments = await ChatService.GetAssessmentsAsync(EnrollmentId);
+            CalculateStats();
+        }
+    }
+
+    private void CalculateStats()
+    {
+        totalSessions = sessions?.Count ?? 0;
+        var present = attendances?.Count(a => a.Status == "Present") ?? 0;
+        var totalAtt = attendances?.Count ?? 0;
+        attendancePercent = totalAtt > 0 ? (present * 100 / totalAtt) : 0;
+
+        totalHw = homeworks?.Count ?? 0;
+        submittedHw = homeworks?.Count(h => h.Status == "Submitted" || h.Status == "Reviewed") ?? 0;
+
+        if (assessments != null && assessments.Count > 0)
+        {
+            var total = assessments.Sum(a => a.TotalMarks > 0 ? (a.MarksObtained * 100 / a.TotalMarks) : 0);
+            avgMarks = total / assessments.Count;
+        }
+        else avgMarks = 0;
+    }
+
+    private async Task SendText()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage) || currentUser == null) return;
+        await ChatService.SendMessageAsync(EnrollmentId, currentUser.UserId, newMessage, "Text");
+        newMessage = "";
+        messages = await ChatService.GetMessagesAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task SendClassLink()
+    {
+        if (string.IsNullOrWhiteSpace(classLinkInput) || currentUser == null) return;
+        await ChatService.SendMessageAsync(EnrollmentId, currentUser.UserId, classLinkInput, "ClassLink");
+        classLinkInput = "";
+        showLinkInput = false;
+        messages = await ChatService.GetMessagesAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task HandleKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SendText();
+    }
+
+    private async Task CreateSession()
+    {
+        if (string.IsNullOrWhiteSpace(newSessionTitle)) return;
+        await ChatService.CreateSessionAsync(
+    EnrollmentId,
+    newSessionTitle,
+    string.IsNullOrEmpty(newSessionLink) ? null : newSessionLink,
+    newSessionDate,
+    durationMinutes
+);
+        newSessionTitle = ""; newSessionLink = "";
+        newSessionDate = DateTime.Now.AddDays(1);
+        sessions = await ChatService.GetSessionsAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task MarkAtt(int sessionId, string status)
+    {
+        var studentId = await ChatService.GetStudentIdByEnrollmentAsync(EnrollmentId);
+        if (studentId == null) return;
+        await ChatService.MarkAttendanceAsync(sessionId, studentId.Value, status);
+        attendances = await ChatService.GetAttendancesAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task CompleteSession(int sessionId)
+    {
+        await ChatService.CompleteSessionAsync(sessionId);
+        sessions = await ChatService.GetSessionsAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task AssignHomework()
+    {
+        if (string.IsNullOrWhiteSpace(hwTitle)) return;
+        await ChatService.AssignHomeworkAsync(EnrollmentId, hwTitle,
+            string.IsNullOrEmpty(hwDescription) ? null : hwDescription, hwDueDate);
+        hwTitle = ""; hwDescription = ""; hwDueDate = null;
+        homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+async Task SubmitHomework(int homeworkId)
+{
+    string filePath = "";
+
+    if (uploadedFiles.ContainsKey(homeworkId) && uploadedFiles[homeworkId] != null)
+    {
+        var file = uploadedFiles[homeworkId];
+
+        var folderPath = Path.Combine("wwwroot", "uploads");
+
+        if (!Directory.Exists(folderPath))
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+
+        var fileName = Guid.NewGuid() + Path.GetExtension(file.Name);
+        var fullPath = Path.Combine(folderPath, fileName);
+
+        using var stream = new FileStream(fullPath, FileMode.Create);
+        await file.OpenReadStream().CopyToAsync(stream);
+
+        filePath = "/uploads/" + fileName;
+    }
+
+    var text = submissionTexts.ContainsKey(homeworkId)
+        ? submissionTexts[homeworkId]
+        : "";
+
+    await ChatService.SubmitHomeworkAsync(homeworkId, text, filePath);
+
+    // clear only this homework data
+    submissionTexts.Remove(homeworkId);
+    uploadedFiles.Remove(homeworkId);
+
+    // reload list
+    homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+
+    StateHasChanged();
+}
+
+    private async Task ReviewHomework(int homeworkId)
+    {
+        await ChatService.UpdateHomeworkStatusAsync(homeworkId, "Reviewed",
+            string.IsNullOrEmpty(hwRemarks) ? null : hwRemarks);
+        hwRemarks = "";
+        homeworks = await ChatService.GetHomeworksAsync(EnrollmentId);
+        StateHasChanged();
+    }
+
+    private async Task AddAssessment()
+    {
+        if (string.IsNullOrWhiteSpace(assessTitle) || assessTotal == 0) return;
+        await ChatService.AddAssessmentAsync(EnrollmentId, assessTitle, assessMarks, assessTotal,
+            string.IsNullOrEmpty(assessRemarks) ? null : assessRemarks);
+        assessTitle = ""; assessMarks = 0; assessTotal = 100; assessRemarks = "";
+        assessments = await ChatService.GetAssessmentsAsync(EnrollmentId);
+        CalculateStats();
+        StateHasChanged();
+    }
+
+    async Task HandleFileUpload(InputFileChangeEventArgs e, int homeworkId)
+{
+    uploadedFiles[homeworkId] = e.File;
+}
+}

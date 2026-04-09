@@ -1,0 +1,331 @@
+﻿@rendermode InteractiveServer
+@page "/tutor-profile/{TutorId:int}"
+@using MqubeSkill.Data
+@using MqubeSkill.Models
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Services
+@inject IDbContextFactory<MQubeDbContext> DbFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject AuthService AuthService
+
+<section class="tutor-profile-bg">
+
+    @if (tutor == null)
+    {
+        <div class="container py-5">
+            <p>Loading tutor details...</p>
+        </div>
+    }
+    else
+    {
+        <div class="container py-5">
+
+            <div class="profile-card">
+
+                <div class="row align-items-center">
+
+                    <div class="col-md-3 text-center">
+                        <img src="/images/avatar.png" class="tutor-image" />
+                    </div>
+
+                    <div class="col-md-9">
+
+                        <h2 class="tutor-name">@tutor.User?.FullName</h2>
+                        <p class="tutor-role">Professional Tutor</p>
+
+                        <hr />
+
+                        <div class="row info-section">
+
+                            <div class="col-md-6">
+                                <p><b>Subjects:</b> @tutor.Subjects</p>
+                                <p><b>Qualification:</b> @tutor.Qualification</p>
+                                <p><b>Contact:</b> @tutor.ContactNo</p>
+                            </div>
+
+                            <div class="col-md-6">
+                                <p>
+                                    <b>Experience:</b>
+                                    @tutor.ExperienceYears years
+                                    @tutor.ExperienceMonths months
+                                </p>
+                                <p><b>Fee:</b> ₹@tutor.FeePerHour / hour</p>
+                                <p><b>Availability:</b> @tutor.Availability</p>
+                                <p>
+                                    <b>Available Time:</b>
+                                    @(tutor.AvailableStartTime.HasValue && tutor.AvailableEndTime.HasValue
+                                        ? $"{tutor.AvailableStartTime.Value.ToString("hh:mm tt")} - {tutor.AvailableEndTime.Value.ToString("hh:mm tt")}"
+                                        : "Not set")
+                                </p>
+                            </div>
+
+                        </div>
+
+                        <div class="button-area">
+                            <button class="btn btn-warning request-btn" @onclick="RequestTutor">
+                                Request Tutor
+                            </button>
+
+                            <div class="mt-4">
+                                <h5>Select Time Slot</h5>
+
+                                @foreach (var hour in slots)
+                                {
+                                    string slotText =
+                                        $"{(hour > 12 ? hour - 12 : hour)}:00 {(hour >= 12 ? "PM" : "AM")} - " +
+                                        $"{(hour + 1 > 12 ? hour + 1 - 12 : hour + 1)}:00 {(hour + 1 >= 12 ? "PM" : "AM")}";
+
+                                    <button class="btn m-1
+                                        @(selectedSlots.Contains(slotText) ? "btn-success" : "btn-outline-light")"
+                                            disabled="@IsSlotBooked(hour)"
+                                            @onclick="() => BookSlot(hour)">
+
+                                        @slotText
+                                    </button>
+                                }
+                            </div>
+
+                            <button class="btn btn-outline-light mt-3" @onclick="GoBack">
+                                Back
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+</section>
+
+<style>
+    .tutor-profile-bg {
+        background-image: url("/images/stu.jpg");
+        background-size: cover;
+        background-position: center;
+        min-height: 100vh;
+        position: relative;
+        padding-top: 120px;
+    }
+
+        .tutor-profile-bg::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+        }
+
+        .tutor-profile-bg .container {
+            position: relative;
+            z-index: 1;
+        }
+
+    .profile-card {
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(15px);
+        border-radius: 25px;
+        padding: 40px;
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        color: white;
+    }
+
+    .tutor-image {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid white;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+
+    .tutor-name {
+        font-weight: 800;
+        font-size: 32px;
+    }
+
+    .tutor-role {
+        color: #ffc107;
+        font-weight: 500;
+        margin-bottom: 10px;
+    }
+
+    .info-section p {
+        margin-bottom: 10px;
+        font-size: 16px;
+    }
+
+    .button-area {
+        margin-top: 20px;
+    }
+
+    .request-btn {
+        border-radius: 30px;
+        padding: 10px 25px;
+        font-weight: 600;
+    }
+</style>
+
+@code {
+    List<int> slots = new();
+    List<string> selectedSlots = new();
+
+    [Parameter]
+    public int TutorId { get; set; }
+
+    Tutor? tutor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        tutor = await db.Tutors
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TutorId == TutorId);
+
+        if (tutor?.AvailableStartTime != null && tutor?.AvailableEndTime != null)
+        {
+            int start = tutor.AvailableStartTime.Value.Hour;
+            int end = tutor.AvailableEndTime.Value.Hour;
+
+            for (int i = start; i < end; i++)
+                slots.Add(i);
+        }
+
+        if (AuthService.LoggedInUserId != 0)
+        {
+            var student = await db.Students
+                .FirstOrDefaultAsync(s => s.UserId == AuthService.LoggedInUserId);
+
+            if (student != null)
+            {
+                var bookings = await db.DemoBookings
+                    .Where(d => d.StudentId == student.StudentId &&
+                                d.TutorId == TutorId &&
+                                d.Status != "Rejected")
+                    .ToListAsync();
+
+                selectedSlots = bookings
+                    .SelectMany(b => new[] { b.SelectedSlot, b.SelectedSlot2 })
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+            }
+        }
+    }
+
+    async Task RequestTutor()
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        var student = await db.Students
+            .FirstOrDefaultAsync(s => s.UserId == AuthService.LoggedInUserId);
+
+        if (student == null) return;
+
+        var booking = await db.DemoBookings
+            .FirstOrDefaultAsync(d => d.StudentId == student.StudentId &&
+                                      d.TutorId == TutorId &&
+                                      d.Status == "Pending");
+
+        if (booking == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Please select at least one slot");
+            return;
+        }
+
+        await JS.InvokeVoidAsync("alert", "Request sent successfully!");
+    }
+
+    async Task BookSlot(int hour)
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        var student = await db.Students
+            .FirstOrDefaultAsync(s => s.UserId == AuthService.LoggedInUserId);
+
+        if (student == null) return;
+
+        string selectedSlot =
+            $"{(hour > 12 ? hour - 12 : hour)}:00 {(hour >= 12 ? "PM" : "AM")} - " +
+            $"{(hour + 1 > 12 ? hour + 1 - 12 : hour + 1)}:00 {(hour + 1 >= 12 ? "PM" : "AM")}";
+
+        var existingBooking = await db.DemoBookings
+            .FirstOrDefaultAsync(d => d.StudentId == student.StudentId &&
+                                      d.TutorId == TutorId &&
+                                      d.Status != "Rejected");
+
+        if (existingBooking != null)
+        {
+            if (existingBooking.SelectedSlot == selectedSlot || existingBooking.SelectedSlot2 == selectedSlot)
+            {
+                await JS.InvokeVoidAsync("alert", "Already selected");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(existingBooking.SelectedSlot) &&
+                !string.IsNullOrEmpty(existingBooking.SelectedSlot2))
+            {
+                await JS.InvokeVoidAsync("alert", "Only 2 slots allowed");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(existingBooking.SelectedSlot))
+                existingBooking.SelectedSlot = selectedSlot;
+            else
+                existingBooking.SelectedSlot2 = selectedSlot;
+
+            db.Update(existingBooking);
+        }
+        else
+        {
+            db.DemoBookings.Add(new DemoBooking
+            {
+                StudentId = student.StudentId,
+                TutorId = TutorId,
+                Subject = student.Subject,
+                BookingDate = DateTime.Now,
+                SelectedSlot = selectedSlot,
+                Status = "Pending",
+                RequestGroupId = new Random().Next(100000, 999999)
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        var bookings = await db.DemoBookings
+            .Where(d => d.StudentId == student.StudentId &&
+                        d.TutorId == TutorId &&
+                        d.Status != "Rejected")
+            .ToListAsync();
+
+        selectedSlots = bookings
+            .SelectMany(b => new[] { b.SelectedSlot, b.SelectedSlot2 })
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    bool IsSlotBooked(int hour)
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        string slot =
+            $"{(hour > 12 ? hour - 12 : hour)}:00 {(hour >= 12 ? "PM" : "AM")} - " +
+            $"{(hour + 1 > 12 ? hour + 1 - 12 : hour + 1)}:00 {(hour + 1 >= 12 ? "PM" : "AM")}";
+
+        return db.DemoBookings
+            .Any(d => d.TutorId == TutorId &&
+                     (d.SelectedSlot == slot || d.SelectedSlot2 == slot) &&
+                      d.Status != "Rejected");
+    }
+
+    void GoBack()
+    {
+        Nav.NavigateTo("/student-dashboard");
+    }
+}

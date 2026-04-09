@@ -1,0 +1,148 @@
+﻿@inherits LayoutComponentBase
+
+<!-- HEADER -->
+<nav class="navbar navbar-expand-lg navbar-dark main-navbar w-100">
+
+    <div class="container">
+
+        <!-- Logo -->
+        <a class="navbar-brand" href="/">
+            <img src="images/s.png" alt="MQube Logo" height="45">
+        </a>
+
+        <!-- Mobile Toggle -->
+        <button class="navbar-toggler text-white" type="button" data-bs-toggle="collapse" data-bs-target="#mqubeNavbar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- Menu -->
+        <div class="collapse navbar-collapse" id="mqubeNavbar">
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/">Home</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/about">About us</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/services">Services</a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white" href="#" data-bs-toggle="dropdown">
+                        Registrations
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/register-tutor">Teachers</a></li>
+                        <li><a class="dropdown-item" href="/register-student">Students</a></li>
+                       
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/login">Login</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/testimonials">Testimonials</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="/contact">Contact us</a>
+                </li>
+
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- BODY CONTENT -->
+
+<div class="main-content">
+    @Body
+</div>
+
+<footer class="main-footer">
+    <div class="container py-4">
+        <div class="row align-items-start gx-3">
+            <!-- gx-3 reduces column gap -->
+            <!-- Quick Links -->
+            <div class="col-md-2 mb-4">
+                <h6 class="footer-title">Quick Links</h6>
+                <ul class="footer-links">
+                    <li><NavLink href="/">Home</NavLink></li>
+                    <li><NavLink href="/about">About us</NavLink></li>
+                    <li><NavLink href="/services">Services</NavLink></li>
+                </ul>
+            </div>
+
+            <div class="col-md-2 mb-4">
+                <ul class="footer-links mt-4">
+                    <li><NavLink href="/register-student">Student Registrations</NavLink></li>
+                    <li><NavLink href="/register-tutor">Tutor Registrations</NavLink></li>
+                    <li><NavLink href="/testimonials">Testimonials</NavLink></li>
+                    <li><NavLink href="/contact">Contact us</NavLink></li>
+                </ul>
+            </div>
+
+
+            <!-- Get in Touch -->
+            <div class="col-md-3 mb-4">
+                <h6 class="footer-title">Get in Touch</h6>
+                <ul class="footer-contact">
+                    <li>
+                        <img src="../images/call.png" alt="">
+                        <span>+91 7397554929</span>
+                    </li>
+                    <li>
+                        <img src="../images/mail.png" alt="">
+                        <span>mqubetuitions@gmail.com</span>
+                    </li>
+                    <li>
+                        <img src="../images/web.png" alt="">
+                        <span>www.mqubetuitions.com</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Visit -->
+            <div class="col-md-5 mb-4">
+                <h6 class="footer-title">Visit</h6>
+
+                <div class="visit-row">
+                    <div class="visit-address">
+                        <p>
+                            MQube Tuitions<br>
+                            3/6, Ganapathy Nagar,<br>
+                            L.Poolangulam, Madurai - 20
+                        </p>
+                    </div>
+
+                    <div class="visit-map">
+                        <img src="../images/footer.png" alt="Location" class="footer-map-img">
+                    </div>
+                </div>
+
+                <div class="visit-follow">
+                    <span class="follow-text">Follow us</span>
+                    <div class="footer-social">
+                        <a href="#"><img src="images/ins.png" alt=""></a>
+                        <a href="#"><img src="images/fb.png" alt=""></a>
+                        <a href="#"><img src="images/wa.png" alt=""></a>
+                        <a href="#"><img src="images/x.png" alt=""></a>
+                        <a href="#"><img src="images/ll.png" alt=""></a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <hr class="footer-divider">
+
+        <div class="footer-bottom text-center">
+            Copyright 2025 MQUBE. ALL RIGHTS RESERVED.
+        </div>
+    </div>
+</footer>

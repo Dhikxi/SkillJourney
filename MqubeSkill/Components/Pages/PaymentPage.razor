@@ -1,0 +1,191 @@
+﻿@inject MQubeDbContext Db
+@inject NavigationManager Nav
+@using MqubeSkill.Services
+@inject AuthService AuthService
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Models
+@using MqubeSkill.Data
+@page "/payment/{TutorId:int}"
+@rendermode InteractiveServer
+
+<div class="payment-wrapper">
+
+    @if (tutor == null)
+    {
+        <p>Loading tutor...</p>
+    }
+    else
+    {
+        <div class="payment-page">
+
+            <div class="payment-card">
+
+                <h4>@tutor.User.FullName</h4>
+                <p>@tutor.Subjects</p>
+
+                <div class="fee-box mt-3">
+                    <!-- ✅ FIXED DECIMAL DISPLAY -->
+                    <p><b>Fee per Hour:</b> ₹@tutor.FeePerHour.ToString("0")</p>
+                    <p class="total-amount">Amount to Pay: ₹@totalAmount</p>
+                </div>
+
+                <p class="payment-text">Scan the QR code below to complete your payment</p>
+                <p>Scan and Pay</p>
+
+                @if (!string.IsNullOrEmpty(tutor.QrImagePath))
+                {
+                    <img src="@tutor.QrImagePath" class="qr-img" />
+
+                    <button class="btn btn-success mt-3 pay-btn" @onclick="PaymentDone">
+                        ✔ I Have Completed Payment
+                    </button>
+                }
+                else
+                {
+                    <p>Tutor has not uploaded QR yet.</p>
+                }
+
+                <br />
+
+                <button class="btn btn-warning mt-4 back-btn" @onclick="GoBack">
+                    ← Back to Dashboard
+                </button>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    int totalSlots = 0;
+    decimal totalAmount = 0;
+
+    [Parameter] public int TutorId { get; set; }
+
+    Tutor? tutor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        tutor = await Db.Tutors
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TutorId == TutorId);
+
+        // ✅ FIX 1: Get logged-in student
+        var student = await Db.Students
+            .FirstOrDefaultAsync(s => s.UserId == AuthService.LoggedInUserId);
+
+        if (student != null && tutor != null)
+        {
+            var bookings = await Db.DemoBookings
+                .Where(d => d.TutorId == TutorId &&
+                            d.StudentId == student.StudentId &&
+                            d.Status != null &&
+                            d.Status != "Rejected")
+                .ToListAsync();
+
+            // ✅ FIX 2: Count slots properly
+            totalSlots = 0;
+
+            foreach (var b in bookings)
+            {
+                if (!string.IsNullOrEmpty(b.SelectedSlot))
+                    totalSlots++;
+
+                if (!string.IsNullOrEmpty(b.SelectedSlot2))
+                    totalSlots++;
+            }
+
+            totalAmount = totalSlots * tutor.FeePerHour;
+        }
+    }
+
+    void GoBack()
+    {
+        Nav.NavigateTo("/student-dashboard");
+    }
+
+    void PaymentDone()
+    {
+        Nav.NavigateTo($"/upload-payment/{TutorId}");
+    }
+}
+
+<style>
+    .payment-wrapper {
+        min-height: 100vh;
+        background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("../images/pa.png");
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 150px;
+    }
+
+    .payment-page {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .payment-card {
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(18px);
+        border-radius: 25px;
+        padding: 35px;
+        width: 420px;
+        text-align: center;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.25);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+    }
+
+        .payment-card h4 {
+            color: #ffc107;
+            font-weight: 700;
+        }
+
+    .qr-img {
+        width: 240px;
+        height: 240px;
+        object-fit: contain;
+        margin-top: 15px;
+        border-radius: 12px;
+        background: white;
+        padding: 10px;
+    }
+
+    .payment-text {
+        color: #e6e6e6;
+        font-size: 14px;
+        margin-top: 10px;
+    }
+
+    .fee-box {
+        background: rgba(0,0,0,0.4);
+        padding: 12px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+    }
+
+    .total-amount {
+        font-size: 18px;
+        font-weight: bold;
+        color: #22c55e;
+    }
+
+    .back-btn {
+        padding: 10px 25px;
+        border-radius: 30px;
+        font-weight: 600;
+    }
+
+    .pay-btn {
+        padding: 12px 28px;
+        border-radius: 30px;
+        font-weight: 600;
+    }
+</style>

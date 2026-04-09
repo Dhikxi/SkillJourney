@@ -1,0 +1,131 @@
+﻿@rendermode InteractiveServer
+@page "/find-tutor"
+@page "/find-tutor/{subject}"
+@using MqubeSkill.Data
+@using MqubeSkill.Models
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Services
+@inject AuthService AuthService
+@inject MQubeDbContext Db
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="tutor-page">
+
+    <div class="container">
+        <h2 class="text-center mb-5 fw-bold">Available Tutors</h2>
+
+        @if (tutors == null)
+        {
+            <p class="text-center">Loading tutors...</p>
+        }
+        else if (!tutors.Any())
+        {
+            <p class="text-center">No tutors available for this subject.</p>
+        }
+        else
+        {
+            <div class="row justify-content-center">
+                @foreach (var tutor in tutors)
+                {
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="tutor-card">
+                            <div class="tutor-avatar">
+                                @(tutor.User?.FullName != null ? tutor.User.FullName.Substring(0, 1) : "T")
+                            </div>
+
+                            <h5 class="tutor-name">@tutor.User?.FullName</h5>
+
+                            <div>
+                                @if (!string.IsNullOrEmpty(tutor.Subjects))
+                                {
+                                    foreach (var sub in tutor.Subjects.Split(','))
+                                    {
+                                        <span class="subject-badge">@sub</span>
+                                    }
+                                }
+                            </div>
+
+                            <p class="qualification">Qualification: @tutor.Qualification</p>
+                            <button class="btn btn-outline-light me-2"
+                                    @onclick='() => Nav.NavigateTo("/tutor-profile/" + tutor.TutorId)'>
+                                View Profile
+                            </button>
+                            <button class="btn book-btn"
+                                                @onclick="() => BookDemo(tutor)">
+                                            Book Demo
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+</div>
+
+@code {
+
+    [Parameter]
+    public string? subject { get; set; }
+
+    List<Tutor>? tutors;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            tutors = new List<Tutor>();
+            return;
+        }
+
+        var searchSubject = subject.Trim().ToLower();
+
+        tutors = await Db.Tutors
+            .Include(t => t.User)
+            .Where(t => t.Subjects != null &&
+                        t.Subjects.ToLower().Contains(searchSubject))
+            .ToListAsync();
+    }
+
+    async Task BookDemo(Tutor tutor)
+    {
+        if (AuthService.LoggedInUserId == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Please login first");
+            return;
+        }
+
+        var student = await Db.Students
+            .FirstOrDefaultAsync(s => s.UserId == AuthService.LoggedInUserId);
+
+        if (student == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Student profile not found");
+            return;
+        }
+
+        var alreadyBooked = await Db.DemoBookings
+            .AnyAsync(d => d.StudentId == student.StudentId && d.TutorId == tutor.TutorId);
+
+        if (alreadyBooked)
+        {
+            await JS.InvokeVoidAsync("alert", "You already booked this tutor");
+            return;
+        }
+
+        var booking = new DemoBooking
+        {
+            StudentId = student.StudentId,
+            TutorId = tutor.TutorId,
+            Subject = subject ?? student.Subject,
+            BookingDate = DateTime.Now
+        };
+
+        Db.DemoBookings.Add(booking);
+        await Db.SaveChangesAsync();
+
+        await JS.InvokeVoidAsync("alert", "Demo booked successfully");
+    }
+
+}

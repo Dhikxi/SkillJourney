@@ -1,0 +1,211 @@
+﻿@rendermode InteractiveServer
+@page "/register-student"
+@using MqubeSkill.Models
+@using MqubeSkill.Services
+@using MqubeSkill.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<MQubeDbContext> DbContextFactory
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<section class="inner-hero">
+    <div class="inner-hero-content">
+        <h1>Student Registration</h1>
+        <p>
+            Register and get matched with expert tutors today.
+        </p>
+    </div>
+</section>
+
+<section class="registration-bg py-5">
+    <div class="container">
+
+        <EditForm Model="model" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+
+            <!-- PROFILE INFORMATION -->
+            <div class="form-card">
+                <h5 class="section-title">Profile Information</h5>
+
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label>Student Name *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.User.FullName" />
+                        <ValidationMessage For="@(() => model.User.FullName)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Gender</label>
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.Student.Gender">
+                            <option value="">Select</option>
+                            <option>Male</option>
+                            <option>Female</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Parent Name *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Student.ParentName" />
+                        <ValidationMessage For="@(() => model.Student.ParentName)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Password *</label>
+                        <InputText type="password"
+                                   class="form-control"
+                                   @bind-Value="model.User.Password" />
+                        <ValidationMessage For="@(() => model.User.Password)" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACADEMIC & CONTACT -->
+            <div class="form-card mt-4">
+                <h5 class="section-title">Academic & Contact Details</h5>
+
+                <div class="row g-4">
+
+                    <div class="col-md-6">
+                        <label>Grade / Level *</label>
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.Student.GradeLevel">
+                            <option value="">Select</option>
+                            <option>8</option>
+                            <option>9</option>
+                            <option>10</option>
+                            <option>11</option>
+                            <option>12</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.Student.GradeLevel)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Board *</label>
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.Student.Board">
+                            <option value="">Select</option>
+                            <option>CBSE</option>
+                            <option>ICSE</option>
+                            <option>State Board</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.Student.Board)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>School Name *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Student.SchoolName" />
+                        <ValidationMessage For="@(() => model.Student.SchoolName)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Contact No *</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Student.ContactNo" />
+                        <ValidationMessage For="@(() => model.Student.ContactNo)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Email Id *</label>
+                        <InputText type="email"
+                                   class="form-control"
+                                   @bind-Value="model.User.Email" />
+                        <ValidationMessage For="@(() => model.User.Email)" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Subject Needed *</label>
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.Student.Subject">
+                            <option value="">Select Subject</option>
+                            <option>Maths</option>
+                            <option>Physics</option>
+                            <option>Chemistry</option>
+                            <option>Biology</option>
+                            <option>English</option>
+                            <option>Computer Science</option>
+                            <option>Grammar</option>
+                            <option>Music</option>
+                            <option>IELTS</option>
+                            <option>Bank exams</option>
+                            <option>Marketing</option>
+                            <option>Group Exams</option>
+                            <option>Programmings</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.Student.Subject)" />
+                    </div>
+
+                    <div class="col-12">
+                        <label>Address</label>
+                        <InputTextArea class="form-control"
+                                       rows="3"
+                                       @bind-Value="model.Student.Address" />
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- SUBMIT -->
+            <div class="mt-4 text-center">
+                <button type="submit" class="btn btn-warning">
+                    Submit
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="alert alert-success mt-3 text-center">
+                    @message
+                </div>
+            }
+
+        </EditForm>
+
+    </div>
+</section>
+
+@code {
+
+    private RegisterStudentViewModel model = new();
+    private string? message;
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            model.User.Role = "Student";
+
+            var createdUser = await AuthService.Register(model.User);
+
+            if (createdUser == null)
+            {
+                message = "User creation failed.";
+                return;
+            }
+
+            model.Student.UserId = createdUser.UserId;
+
+            model.Student.ParentName ??= "";
+            model.Student.Gender ??= "";
+            model.Student.SchoolName ??= "";
+            model.Student.Board ??= "";
+            model.Student.GradeLevel ??= "";
+
+            using var db = DbContextFactory.CreateDbContext();
+            db.Students.Add(model.Student);
+            await db.SaveChangesAsync();
+
+            message = "Registration Successful!";
+            await Task.Delay(1000);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            message = ex.InnerException?.Message ?? ex.Message;
+        }
+    }
+}

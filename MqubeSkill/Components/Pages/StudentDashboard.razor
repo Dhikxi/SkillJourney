@@ -1,0 +1,611 @@
+﻿@rendermode InteractiveServer
+@page "/student-dashboard"
+@using MqubeSkill.Data
+@using MqubeSkill.Models
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject IDbContextFactory<MQubeDbContext> DbFactory
+@inject EnrollmentService EnrollmentService
+
+@if (Nav.Uri.Contains("payment=success"))
+{
+    <div class="alert alert-success">
+        Payment submitted successfully.
+    </div>
+}
+
+@if (Nav.Uri.Contains("payment=already"))
+{
+    <div class="alert alert-warning">
+        Payment already submitted for this tutor.
+    </div>
+}
+
+<div class="dashboard-container">
+
+    @if (showProfile && student != null && student.User != null)
+    {
+        <div class="profile-popup">
+            <div class="profile-box">
+
+                <div class="profile-avatar">
+                    @(student.User.FullName != null ? student.User.FullName[0].ToString() : "S")
+                </div>
+
+                <h3>@student.User.FullName</h3>
+
+                <div class="profile-details">
+                    <p><b>Email:</b> @(student.User.Email ?? "Not available")</p>
+
+                    @if (!isEditing)
+                    {
+                        <p><b>Subject:</b> @student.Subject</p>
+                        <p><b>Grade:</b> @student.GradeLevel</p>
+                        <p><b>School:</b> @student.SchoolName</p>
+                        <p><b>Parent:</b> @student.ParentName</p>
+                        <p><b>Contact:</b> @student.ContactNo</p>
+                    }
+                    else
+                    {
+                        <InputText class="form-control mt-2" @bind-Value="editSubject" placeholder="Subject" />
+                        <InputText class="form-control mt-2" @bind-Value="editGrade" placeholder="Grade" />
+                        <InputText class="form-control mt-2" @bind-Value="editSchool" placeholder="School" />
+                        <InputText class="form-control mt-2" @bind-Value="editParent" placeholder="Parent Name" />
+                        <InputText class="form-control mt-2" @bind-Value="editContact" placeholder="Contact" />
+                    }
+                </div>
+                <button class="btn btn-light mt-3" @onclick="CloseProfile">Close</button>
+                <button class="btn btn-danger mt-2" @onclick="Logout">Logout</button>
+                <button class="btn btn-warning mt-2" @onclick="EnableEdit">
+                    Edit Profile
+                </button>
+                @if (isEditing)
+                {
+                    <button class="btn btn-success mt-2" @onclick="SaveProfile">
+                        Save Changes
+                    </button>
+                }
+
+            </div>
+        </div>
+    }
+
+    <div class="welcome-section">
+
+        <div class="top-bar">
+            <button class="chat-fab me-3" @onclick='() => Nav.NavigateTo("/chat")'>
+                💬 My Classes
+            </button>
+            <button class="profile-btn" @onclick="GoToProfile">My Profile</button>
+        </div>
+
+        @if (student != null && student.User != null)
+        {
+            <h2>Welcome back, @student.User.FullName 👋</h2>
+
+            @if (!string.IsNullOrEmpty(student.Subject))
+            {
+                <a href="/find-tutor/@student.Subject" class="btn btn-warning mt-3">
+                    Find Tutor for @student.Subject
+                </a>
+            }
+        }
+    </div>
+
+
+    <!-- DEMO REQUESTS -->
+    <div class="tutor-section">
+        <div class="section-header">
+            <h4>My Demo Requests</h4>
+        </div>
+
+        @if (myRequests == null || myRequests.Count == 0)
+        {
+            <p style="color:white">No requests yet.</p>
+        }
+        else
+        {
+            <div class="row mt-4 scroll-container">
+
+                @foreach (var r in myRequests)
+                {
+                    <div class="col-md-4 mb-3">
+
+                        <div class="tutor-card">
+
+                            <h5>@r.Tutor?.User?.FullName</h5>
+
+                            <p><b>Subject:</b> @r.Subject</p>
+                            <p><b>Status:</b> @r.Status</p>
+                            <p><b>Date:</b> @r.BookingDate.ToShortDateString()</p>
+
+                            <!-- ✅ NEW: Accepted / Rejected status -->
+                            @if (r.StudentDecision == "Accepted")
+                            {
+                                <p>
+                                    <b>Your Slot : </b>
+                                    @if (!string.IsNullOrWhiteSpace(r.SelectedSlot) && !string.IsNullOrWhiteSpace(r.SelectedSlot2))
+                                    {
+                                        @($" {r.SelectedSlot}  and  {r.SelectedSlot2} ")
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(r.SelectedSlot))
+                                    {
+                                        @r.SelectedSlot
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(r.SelectedSlot2))
+                                    {
+                                        @r.SelectedSlot2
+                                    }
+                                    else
+                                    {
+                                        <span>Not selected</span>
+                                    }
+                                </p>
+                                <span class="badge bg-success">Accepted</span>
+                            }
+                            else if (r.StudentDecision == "Rejected")
+                            {
+                                <span class="badge bg-danger">Rejected</span>
+                            }
+                            @if (r.Status == "Demo Scheduled")
+                            {
+                                @if (r.StudentDecision == null)
+                                {
+                                    <a href="@r.DemoLink"
+                                           target="_blank"
+                                           class="btn btn-primary btn-sm">
+                                        Join Demo Class
+                                    </a>
+                                    <div class="mt-2">
+                                        <button class="btn btn-success btn-sm"
+                                                @onclick="() => ContinueTutor(r.DemoBookingId)">
+                                            Continue with Tutor
+                                        </button>
+
+                                        <button class="btn btn-danger btn-sm"
+                                                @onclick="() => RejectTutor(r.DemoBookingId)">
+                                            Reject Tutor
+                                        </button>
+                                    </div>
+                                }
+                                <br />
+                                @if (r.StudentDecision == "Accepted")
+                                {
+                                    var payment = payments?.FirstOrDefault(p => p.TutorId == r.TutorId);
+                                    if (payment == null)
+                                    {
+                                        <button class="btn btn-success mt-2"
+                                                @onclick="() => OpenPayment(r.TutorId)">
+                                            Pay Now
+                                        </button>
+                                    }
+                                    else if (payment.Status == "Pending")
+                                    {
+                                        <span class="badge bg-info mt-2">
+                                            Payment Submitted (Pending Verification)
+                                        </span>
+                                    }
+                                    else if (payment.Status == "Verified")
+                                    {
+                                        <span class="badge bg-success mt-2">
+                                            Payment Verified
+                                        </span>
+                                    }
+                                }
+                            }
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+    </div>
+
+
+    <!-- PAYMENT STATUS -->
+    <div class="tutor-section">
+        <div class="section-header">
+            <h4>My Payments</h4>
+        </div>
+
+        @if (payments == null || payments.Count == 0)
+        {
+            <p style="color:white">No payments submitted yet.</p>
+        }
+        else
+        {
+            <div class="row mt-4 scroll-container">
+
+                @foreach (var p in payments)
+                {
+                    var tutorName = tutors?.FirstOrDefault(t => t.TutorId == p.TutorId)?.User?.FullName;
+
+                    <div class="col-md-4 mb-3">
+
+                        <div class="tutor-card">
+
+                            <!-- ✅ FIX: Tutor name instead of ID -->
+                            <p><b>Tutor:</b> @(tutorName ?? "Unknown")</p>
+                            <p><b>Subject:</b> @GetSubjectName(p.TutorId)</p>
+
+                            <p>
+                                <b>Screenshot:</b>
+                                <a href="@p.ScreenshotPath" target="_blank" style="color:#ffc107">
+                                    View
+                                </a>
+                            </p>
+
+                            <p>
+                                <b>Status:</b>
+                                <span class="badge bg-warning text-dark">
+                                    @p.Status
+                                </span>
+                            </p>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+    </div>
+
+
+    <!-- EXPLORE TUTORS -->
+    <div class="tutor-section">
+        <div class="section-header">
+            <h4>Explore Other Tutors</h4>
+        </div>
+
+        <div class="row mt-4 scroll-container">
+
+            @if (tutors != null)
+            {
+                @foreach (var tutor in tutors)
+                {
+                    <div class="col-md-4 mb-4">
+
+                        <div class="tutor-card">
+
+                            <h5>@(tutor.User?.FullName ?? "Tutor")</h5>
+
+                            <p><b>Subjects:</b> @tutor.Subjects</p>
+
+                            <p>
+                                <b>Available Time:</b>
+                                @(tutor.AvailableStartTime.HasValue && tutor.AvailableEndTime.HasValue
+                                    ? $"{tutor.AvailableStartTime.Value.ToString("hh:mm tt")} - {tutor.AvailableEndTime.Value.ToString("hh:mm tt")}"
+                                    : "Not set")
+                            </p>
+
+                            <p><b>Qualification:</b> @tutor.Qualification</p>
+
+                            <button class="btn btn-outline-primary mt-2"
+                                    @onclick="() => ViewTutor(tutor.TutorId)">
+                                View Tutor
+                            </button>
+
+                        </div>
+
+                    </div>
+                }
+            }
+
+        </div>
+    </div>
+
+</div>
+
+
+<style>
+    .dashboard-container {
+        padding: 60px 100px;
+        background-image: url("/images/stu.jpg");
+        background-size: cover;
+        background-position: center;
+        min-height: 100vh;
+        position: relative;
+    }
+
+    .dashboard-container::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.65);
+        z-index: 0;
+        pointer-events: none;
+    }
+
+    .dashboard-container > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    .top-bar {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .profile-btn {
+        background: linear-gradient(135deg,#ffc107,#ff9800);
+        border: none;
+        padding: 12px 26px;
+        border-radius: 50px;
+        font-weight: 600;
+        color: black;
+    }
+
+    .welcome-section {
+        text-align: center;
+        margin-top: 50px;
+        margin-bottom: 80px;
+        color: white;
+    }
+
+    .tutor-section h4 {
+        color: white;
+    }
+
+    .profile-popup {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .profile-box {
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(20px);
+        padding: 40px;
+        border-radius: 25px;
+        width: 400px;
+        text-align: center;
+        color: white;
+    }
+
+    .profile-avatar {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(135deg,#ffc107,#ff9800);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: bold;
+        margin: 0 auto 15px auto;
+        color: black;
+    }
+
+    .profile-details {
+        text-align: left;
+        margin-top: 15px;
+    }
+
+    .chat-fab {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white !important;
+        border: none;
+        padding: 12px 26px;
+        border-radius: 50px;
+        font-weight: 600;
+        text-decoration: none !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 4px 15px rgba(79,70,229,0.4);
+        transition: all 0.2s ease;
+    }
+
+    .chat-fab:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(79,70,229,0.5);
+    }
+
+    .scroll-container {
+        max-height: 420px;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    .scroll-container::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .scroll-container::-webkit-scrollbar-thumb {
+        background: #ffc107;
+        border-radius: 10px;
+    }
+
+    .tutor-card {
+        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+        backdrop-filter: blur(12px);
+        border-radius: 18px;
+        padding: 22px;
+        border: 1px solid rgba(255,255,255,0.1);
+        transition: all 0.25s ease;
+        height: 100%;
+    }
+
+    .tutor-card:hover {
+        transform: translateY(-6px) scale(1.01);
+        box-shadow: 0 14px 35px rgba(0,0,0,0.35);
+    }
+
+    .tutor-card h5 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #ffc107;
+        margin-bottom: 10px;
+    }
+
+    .tutor-card p {
+        color: #e6e6e6;
+        font-size: 14px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .section-header h4 {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+</style>
+
+@code {
+    bool isEditing = false;
+
+    string? editSubject;
+    string? editGrade;
+    string? editSchool;
+    string? editParent;
+    string? editContact;
+    string GetSubjectName(int tutorId)
+    {
+        return tutors?
+            .FirstOrDefault(t => t.TutorId == tutorId)?.Subjects ?? "N/A";
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && Nav.Uri.Contains("payment="))
+        {
+            Nav.NavigateTo("/student-dashboard", true);
+        }
+    }
+
+    List<DemoBooking>? myRequests;
+    List<Payment>? payments;
+    Student? student;
+    List<Tutor>? tutors;
+    bool showProfile = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthService.LoggedInUserId == 0)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var userId = AuthService.LoggedInUserId;
+
+        using var Db = DbFactory.CreateDbContext();
+
+        student = await Db.Students
+            .Include(s => s.User)
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        if (student == null) return;
+
+        tutors = await Db.Tutors
+            .Include(t => t.User)
+            .ToListAsync();
+
+        payments = await Db.Payments
+            .Where(p => p.StudentId == student.StudentId)
+            .ToListAsync();
+
+        myRequests = await Db.DemoBookings
+            .Include(d => d.Tutor)
+            .ThenInclude(t => t!.User)
+            .Where(d => d.StudentId == student.StudentId)
+            .OrderByDescending(d => d.BookingDate)
+            .ToListAsync();
+    }
+
+    void GoToProfile() => showProfile = true;
+    void CloseProfile() => showProfile = false;
+
+    void ViewTutor(int tutorId) => Nav.NavigateTo($"/tutor-profile/{tutorId}");
+
+    void Logout()
+    {
+        AuthService.Logout();
+        Nav.NavigateTo("/login");
+    }
+
+    void OpenPayment(int tutorId) => Nav.NavigateTo($"/payment/{tutorId}");
+
+    async Task ContinueTutor(int bookingId)
+    {
+        using var Db = DbFactory.CreateDbContext();
+
+        var booking = await Db.DemoBookings.FirstOrDefaultAsync(x => x.DemoBookingId == bookingId);
+        if (booking == null) return;
+
+        booking.StudentDecision = "Accepted";
+        await Db.SaveChangesAsync();
+
+        var student = await Db.Students.FirstOrDefaultAsync(s => s.StudentId == booking.StudentId);
+
+        if (student != null)
+        {
+            await EnrollmentService.CreateEnrollmentAsync(student.StudentId, booking.TutorId, 1);
+        }
+
+        Nav.NavigateTo("/student-dashboard", true);
+    }
+
+    async Task RejectTutor(int bookingId)
+    {
+        using var Db = DbFactory.CreateDbContext();
+
+        var booking = await Db.DemoBookings.FirstOrDefaultAsync(x => x.DemoBookingId == bookingId);
+        if (booking == null) return;
+
+        booking.StudentDecision = "Rejected";
+        await Db.SaveChangesAsync();
+
+        // ✅ FIX: refresh so UI updates immediately
+        Nav.NavigateTo("/student-dashboard", true);
+    }
+    void EnableEdit()
+    {
+        isEditing = true;
+
+        editSubject = student?.Subject;
+        editGrade = student?.GradeLevel;
+        editSchool = student?.SchoolName;
+        editParent = student?.ParentName;
+        editContact = student?.ContactNo;
+    }
+    async Task SaveProfile()
+    {
+        using var Db = DbFactory.CreateDbContext();
+
+        var s = await Db.Students
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.StudentId == student!.StudentId);
+
+        if (s == null) return;
+
+        s.Subject = editSubject;
+        s.GradeLevel = editGrade;
+        s.SchoolName = editSchool;
+        s.ParentName = editParent;
+        s.ContactNo = editContact;
+
+        await Db.SaveChangesAsync();
+
+        student = s;
+        isEditing = false;
+    }
+}

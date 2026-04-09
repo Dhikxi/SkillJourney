@@ -1,0 +1,123 @@
+﻿@using MqubeSkill.Models
+@using MqubeSkill.Data
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Services
+@page "/upload-payment/{TutorId:int}"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+@inject MQubeDbContext Db
+@inject AuthService AuthService
+
+<div class="payment-container">
+
+    <div class="payment-card">
+
+        <h3 class="title">Upload Payment Screenshot</h3>
+
+        <InputFile OnChange="UploadFile" class="form-control mt-3" />
+
+        <button class="btn btn-success mt-4 w-100" @onclick="SavePayment">
+            Submit Payment (@TutorId)
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+
+    [Parameter] public int TutorId { get; set; }
+
+    IBrowserFile? file;
+    string savedPath = "";
+
+    Student? student;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = AuthService.LoggedInUserId;
+
+        student = await Db.Students
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+    }
+
+    async Task UploadFile(InputFileChangeEventArgs e)
+    {
+        file = e.GetMultipleFiles(1).FirstOrDefault();
+
+        if (file == null)
+            return;
+
+        var folder = Path.Combine(Env.WebRootPath, "payments");
+
+        if (!Directory.Exists(folder))
+            Directory.CreateDirectory(folder);
+
+        var fileName = Guid.NewGuid().ToString() + "_" + file.Name;
+
+        var filePath = Path.Combine(folder, fileName);
+
+        using var stream = new FileStream(filePath, FileMode.Create);
+
+        await file.OpenReadStream(10485760).CopyToAsync(stream);
+
+        savedPath = "/payments/" + fileName;
+
+        Console.WriteLine("File saved: " + savedPath);
+    }
+
+    async Task SavePayment()
+    {
+        if (string.IsNullOrEmpty(savedPath) || student == null)
+            return;
+
+        var existing = Db.Payments
+            .FirstOrDefault(p => p.TutorId == TutorId && p.StudentId == student.StudentId);
+
+        if (existing != null)
+        {
+            Nav.NavigateTo("/student-dashboard?payment=already");
+            return;
+        }
+
+        var payment = new MqubeSkill.Models.Payment
+        {
+            TutorId = TutorId,
+            StudentId = student.StudentId,
+            ScreenshotPath = savedPath,
+            PaymentDate = DateTime.Now,
+            Status = "Pending"
+        };
+
+        Db.Payments.Add(payment);
+        await Db.SaveChangesAsync();
+
+        Nav.NavigateTo("/student-dashboard?payment=success");
+    }
+
+}
+
+<style>
+
+    .payment-container {
+        min-height: 70vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg,#eef2f7,#dbe7ff);
+    }
+
+    .payment-card {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 420px;
+        text-align: center;
+    }
+
+    .title {
+        font-weight: 600;
+    }
+</style>

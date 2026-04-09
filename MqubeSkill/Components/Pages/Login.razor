@@ -1,0 +1,118 @@
+﻿@page "/login"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using MqubeSkill.Models
+@using MqubeSkill.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<section class="inner-hero">
+    <div class="inner-hero-content">
+        <h1>Login to Your Account</h1>
+        <p>
+            Access your dashboard and continue your learning journey.
+        </p>
+    </div>
+</section>
+
+
+<section class="login-section">
+    <div class="container d-flex justify-content-center align-items-center"
+         style="min-height: 70vh;">
+
+
+      <div class="col-md-6 col-lg-5">
+        <div class="card shadow-lg p-4 border-0 rounded-4">
+
+    
+
+                <h3 class="text-center mb-4 fw-bold text-primary">
+                    Login
+                </h3>
+
+                <EditForm Model="loginModel"
+          OnValidSubmit="HandleLogin"
+          FormName="LoginForm">
+
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <InputText @bind-Value="loginModel.Email"
+                   class="form-control form-control-lg" />
+        <ValidationMessage For="@(() => loginModel.Email)"
+                           class="text-danger small" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Password</label>
+        <InputText type="password"
+                   @bind-Value="loginModel.Password"
+                   class="form-control form-control-lg" />
+        <ValidationMessage For="@(() => loginModel.Password)"
+                           class="text-danger small" />
+    </div>
+
+    <div class="d-grid">
+        <button type="submit"
+                class="btn btn-primary btn-lg rounded-3">
+            Login
+        </button>
+    </div>
+
+</EditForm>
+
+
+                @if (!string.IsNullOrEmpty(message))
+                {
+                    <div class="alert alert-danger mt-3 text-center">
+                        @message
+                    </div>
+                }
+
+           
+
+        </div>
+    </div>
+    </div>
+</section>
+
+
+
+@code {
+    private LoginModel loginModel = new();
+    private string? message;
+
+    private async Task HandleLogin()
+    {
+        var user = await AuthService.Login(
+            loginModel.Email ?? "",
+            loginModel.Password ?? ""
+        );
+
+        if (user != null)
+        {
+            if (user.Role == "Student")
+                Nav.NavigateTo("/student-dashboard");
+            else if (user.Role == "Tutor")
+                Nav.NavigateTo("/tutor-dashboard");
+            else if (user.Role == "Admin")
+                Nav.NavigateTo("/admin-dashboard");
+            else
+                Nav.NavigateTo("/");
+        }
+        else
+        {
+            message = "Invalid Credentials";
+        }
+    }
+
+    public class LoginModel
+    {
+        [Required]
+        public string? Email { get; set; }
+
+        [Required]
+        public string? Password { get; set; }
+    }
+}
