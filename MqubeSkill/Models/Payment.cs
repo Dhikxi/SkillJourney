@@ -14,5 +14,6 @@ namespace MqubeSkill.Models
 
         public DateTime PaymentDate { get; set; } = DateTime.Now;
         public string Status { get; set; } = "Pending";
+        public decimal Amount { get; set; }
     }
 }

@@ -50,7 +50,7 @@
                                     @tutor.ExperienceYears years
                                     @tutor.ExperienceMonths months
                                 </p>
-                                <p><b>Fee:</b> ₹@tutor.FeePerHour / hour</p>
+                                <p><b>Fee:</b> ₹@tutor.FeePerHour.ToString("0.00") / hour</p>
                                 <p><b>Availability:</b> @tutor.Availability</p>
                                 <p>
                                     <b>Available Time:</b>
@@ -318,10 +318,22 @@
             $"{(hour > 12 ? hour - 12 : hour)}:00 {(hour >= 12 ? "PM" : "AM")} - " +
             $"{(hour + 1 > 12 ? hour + 1 - 12 : hour + 1)}:00 {(hour + 1 >= 12 ? "PM" : "AM")}";
 
-        return db.DemoBookings
-            .Any(d => d.TutorId == TutorId &&
-                     (d.SelectedSlot == slot || d.SelectedSlot2 == slot) &&
-                      d.Status != "Rejected");
+        var bookings = db.DemoBookings
+            .Where(d => d.TutorId == TutorId &&
+                       (d.SelectedSlot == slot || d.SelectedSlot2 == slot) &&
+                        d.Status != "Rejected")
+            .ToList();
+
+        foreach (var b in bookings)
+        {
+            // ⏰ ONLY block if booking is TODAY
+            if (b.BookingDate.Date == DateTime.Today)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void GoBack()

@@ -1,11 +1,425 @@
 ﻿@page "/admin-dashboard"
 @rendermode InteractiveServer
+@inject NavigationManager Nav
+@using Microsoft.EntityFrameworkCore
+@using MqubeSkill.Data
+@using MqubeSkill.Models
+@inject IDbContextFactory<MQubeDbContext> DbFactory
 
-<h2 class="mt-4 text-center">Admin Dashboard</h2>
+<section class="admin-bg">
 
-<div class="container mt-5">
-    <div class="card shadow p-4 rounded-4">
-        <h4>Welcome Admin 👑</h4>
-        <p>You are successfully logged in as Admin.</p>
+    <div class="container py-5">
+
+        <h2 class="text-center text-white fw-bold mb-5">
+            Admin Dashboard 👑
+        </h2>
+
+        <!-- 🔢 STATS CARDS -->
+        <div class="row g-4 mb-5">
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h5>Total Students</h5>
+                    <h2>@totalStudents</h2>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h5>Total Tutors</h5>
+                    <h2>@totalTutors</h2>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h5>Total Sessions</h5>
+                    <h2>@totalSessions</h2>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h5>Total Payments</h5>
+                    <h2>@totalPayments</h2>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h5>Total Revenue</h5>
+                    <h2>₹@totalRevenue.ToString("N0")</h2>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 👩‍🎓 STUDENTS -->
+        <div class="admin-card">
+            <h4>Students</h4>
+
+            <div class="table-responsive">
+
+                <table class="table table-dark table-striped mt-3 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Grade</th>
+                            <th>Subject</th>
+                            <th>School</th>
+                            <th>Parent</th>
+                            <th>Contact</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var s in students)
+                        {
+                            <tr>
+                                <td>@s.User?.FullName</td>
+                                <td>@s.User?.Email</td>
+                                <td>@s.GradeLevel</td>
+                                <td>@s.Subject</td>
+                                <td>@s.SchoolName</td>
+                                <td>@s.ParentName</td>
+                                <td>@s.ContactNo</td>
+                            </tr>
+                        }
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+        <!-- 👨‍🏫 TUTORS -->
+        <div class="admin-card mt-4">
+
+            <h4>Tutors</h4>
+
+            <div class="table-responsive">
+
+                <table class="table table-dark table-striped mt-3 align-middle">
+
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Subjects</th>
+                            <th>Fee</th>
+                            <th>Resume</th>
+                            <th>ID Proof</th>
+                            <th>Degree</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var t in tutors)
+                        {
+                            <tr>
+
+                                <td>@t.User?.FullName</td>
+
+                                <td>@t.Subjects</td>
+
+                                <td>₹@t.FeePerHour.ToString("0.00")</td>
+
+                                <td>
+                                    <a href="@t.ResumePath"
+                                           target="_blank"
+                                           class="btn btn-sm btn-info">
+                                        View
+                                    </a>
+                                </td>
+
+                                <td>
+                                    <a href="@t.IdentityProofPath"
+                                           target="_blank"
+                                           class="btn btn-sm btn-info">
+                                        View
+                                    </a>
+                                </td>
+
+                                <td>
+                                    <a href="@t.DegreePath"
+                                           target="_blank"
+                                           class="btn btn-sm btn-info">
+                                        View
+                                    </a>
+                                </td>
+
+                                <td class="status-cell">
+
+                                    @if (t.IsApproved)
+                                    {
+                                        <span class="badge bg-success">
+                                            Approved
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">
+                                            Pending
+                                        </span>
+                                    }
+
+                                </td>
+
+                                <td class="action-cell">
+
+                                    @if (!t.IsApproved)
+                                    {
+                                        <button class="btn btn-success btn-sm action-btn"
+                                                @onclick="() => ApproveTutor(t.TutorId)">
+                                            Approve
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-success btn-sm action-btn invisible-btn">
+                                            Approve
+                                        </button>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+        <!-- 💰 PAYMENTS -->
+        <div class="admin-card mt-4">
+
+            <h4>Payments</h4>
+
+            <div class="table-responsive">
+
+                <table class="table table-dark table-striped mt-3 align-middle">
+
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var p in payments)
+                        {
+                            <tr>
+
+                                <td>@p.Student?.User?.FullName</td>
+
+                                <td>₹@p.Amount.ToString("0.00")</td>
+
+                                <td>@p.Status</td>
+
+                                <td class="action-cell">
+
+                                    @if (p.Status == "Pending")
+                                    {
+                                        <button class="btn btn-success btn-sm"
+                                                @onclick="() => VerifyPayment(p.PaymentId)">
+                                            Verify
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">
+                                            Verified
+                                        </span>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
     </div>
-</div>
+
+</section>
+
+<style>
+
+    .admin-bg {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        min-height: 100vh;
+        padding-top: 120px;
+    }
+
+    .stat-card {
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 25px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+    .admin-card {
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 25px;
+        color: white;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+
+    table {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .stat-card h2 {
+        font-size: 38px;
+        font-weight: bold;
+        overflow-wrap: break-word;
+    }
+
+    .table td,
+    .table th {
+        vertical-align: middle;
+    }
+
+    .badge {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+
+    .btn-sm {
+        padding: 6px 14px;
+        font-size: 13px;
+    }
+
+    .action-cell {
+        width: 130px;
+        text-align: center;
+    }
+
+    .status-cell {
+        width: 120px;
+        text-align: center;
+    }
+
+    .action-btn {
+        width: 100px;
+        height: 38px;
+    }
+
+    .invisible-btn {
+        visibility: hidden;
+    }
+</style>
+
+@code {
+
+    int totalStudents;
+    int totalTutors;
+    int totalSessions;
+    int totalPayments;
+    decimal totalRevenue;
+
+    List<Student> students = new();
+    List<Tutor> tutors = new();
+    List<Payment> payments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        totalStudents = await db.Students.CountAsync();
+        totalTutors = await db.Tutors.CountAsync();
+        totalSessions = await db.ClassSessions.CountAsync();
+        totalPayments = await db.Payments.CountAsync();
+
+        totalRevenue = await db.Payments
+            .Where(p => p.Status == "Verified")
+            .SumAsync(p => p.Amount);
+
+        students = await db.Students
+            .Include(s => s.User)
+            .ToListAsync();
+
+        tutors = await db.Tutors
+            .Include(t => t.User)
+            .ToListAsync();
+
+        payments = await db.Payments
+            .Include(p => p.Student)
+            .ThenInclude(s => s.User)
+            .ToListAsync();
+    }
+
+    async Task ApproveTutor(int tutorId)
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        var tutor = await db.Tutors.FindAsync(tutorId);
+
+        if (tutor == null)
+            return;
+
+        tutor.IsApproved = true;
+
+        await db.SaveChangesAsync();
+
+        tutors = await db.Tutors
+            .Include(t => t.User)
+            .ToListAsync();
+
+        StateHasChanged();
+    }
+
+    async Task VerifyPayment(int paymentId)
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        var payment = await db.Payments.FindAsync(paymentId);
+
+        if (payment == null)
+            return;
+
+        payment.Status = "Verified";
+
+        await db.SaveChangesAsync();
+
+        payments = await db.Payments
+            .Include(p => p.Student)
+            .ThenInclude(s => s.User)
+            .ToListAsync();
+
+        StateHasChanged();
+    }
+
+}

@@ -7,6 +7,7 @@
 
 @inject IDbContextFactory<MQubeDbContext> DbContextFactory
 @inject AuthService AuthService
+@inject EmailService EmailService
 @inject NavigationManager Nav
 
 <section class="inner-hero">
@@ -114,7 +115,17 @@
                         <InputText type="email"
                                    class="form-control"
                                    @bind-Value="model.User.Email" />
+                        
                         <ValidationMessage For="@(() => model.User.Email)" />
+                        <InputText class="form-control mt-2"
+                                   placeholder="Enter OTP"
+                                   @bind-Value="enteredOtp" />
+
+                        <button type="button"
+                                class="btn btn-primary mt-2"
+                                @onclick="SendOtp">
+                            Send OTP
+                        </button>
                     </div>
 
                     <div class="col-md-6">
@@ -172,9 +183,16 @@
 
     private RegisterStudentViewModel model = new();
     private string? message;
+    private string generatedOtp = "";
+    private string enteredOtp = "";
 
     private async Task HandleRegister()
     {
+        if (enteredOtp != generatedOtp)
+        {
+            message = "Invalid OTP";
+            return;
+        }
         try
         {
             model.User.Role = "Student";
@@ -207,5 +225,18 @@
         {
             message = ex.InnerException?.Message ?? ex.Message;
         }
+    }
+    private async Task SendOtp()
+    {
+        if (string.IsNullOrWhiteSpace(model.User.Email))
+        {
+            message = "Enter email first.";
+            return;
+        }
+
+        generatedOtp =
+            await AuthService.SendOtp(model.User.Email);
+
+        message = "OTP sent to your email.";
     }
 }

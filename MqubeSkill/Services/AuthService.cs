@@ -1,6 +1,7 @@
 ﻿using MqubeSkill.Data;
 using MqubeSkill.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,10 +11,25 @@ namespace MqubeSkill.Services
     {
         public static int LoggedInUserId;
         private readonly IDbContextFactory<MQubeDbContext> _contextFactory;
+        private readonly EmailService _emailService;
 
-        public AuthService(IDbContextFactory<MQubeDbContext> contextFactory)
+        public AuthService(
+    IDbContextFactory<MQubeDbContext> contextFactory,
+    EmailService emailService)
         {
             _contextFactory = contextFactory;
+            _emailService = emailService;
+        }
+
+        public async Task<string> SendOtp(string email)
+        {
+            Random random = new Random();
+
+            string otp = random.Next(100000, 999999).ToString();
+
+            await _emailService.SendOtpEmail(email, otp);
+
+            return otp;
         }
 
         public async Task<User> Register(User user)

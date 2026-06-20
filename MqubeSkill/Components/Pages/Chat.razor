@@ -208,6 +208,12 @@ else
                                     <!-- Create Session -->
                                     <div class="section-card">
                                         <h6 class="section-title">📅 Create New Session</h6>
+                                        @if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div style="color:red; margin-bottom:10px;">
+        @errorMessage
+    </div>
+}
                                         <div class="form-row">
                                             <input class="tab-input" placeholder="Session title (e.g. Chapter 3)"
                                                    @bind="newSessionTitle" />
@@ -215,8 +221,12 @@ else
                                                    @bind="newSessionDate" />
                                             <input class="tab-input" placeholder="Class link (optional)"
                                                    @bind="newSessionLink" />
-                                            <input class="tab-input" type="number" placeholder="Duration (minutes)" 
-                                                   @bind="durationMinutes" />
+                                            <input class="tab-input" type="number" placeholder="Number of slots" 
+                                                   @bind="slotCount" />
+
+                                            <p style="color:#94a3b8; font-size:12px;">
+                                                Each slot = 60 mins
+                                            </p>
                                             <button class="btn-primary-tab" @onclick="CreateSession">
                                                 + Create Session
                                             </button>
@@ -687,8 +697,10 @@ else
 </style>
 
 @code {
+    private string errorMessage = "";
     List<ClassSession> sessions = new();
-    int durationMinutes = 60;
+    int slotCount = 1;
+int durationMinutes => slotCount * 60;
     Dictionary<int, string> submissionTexts = new();
 Dictionary<int, IBrowserFile> uploadedFiles = new();
     
@@ -847,20 +859,43 @@ Dictionary<int, IBrowserFile> uploadedFiles = new();
     }
 
     private async Task CreateSession()
+{
+    if (string.IsNullOrWhiteSpace(newSessionTitle)) return;
+
+    var newStart = newSessionDate;
+    var newEnd = newSessionDate.AddMinutes(durationMinutes);
+
+    // 🔴 CHECK CLASH
+    var isClashing = sessions.Any(s =>
     {
-        if (string.IsNullOrWhiteSpace(newSessionTitle)) return;
-        await ChatService.CreateSessionAsync(
-    EnrollmentId,
-    newSessionTitle,
-    string.IsNullOrEmpty(newSessionLink) ? null : newSessionLink,
-    newSessionDate,
-    durationMinutes
-);
-        newSessionTitle = ""; newSessionLink = "";
-        newSessionDate = DateTime.Now.AddDays(1);
-        sessions = await ChatService.GetSessionsAsync(EnrollmentId);
-        StateHasChanged();
-    }
+        var existingStart = s.ScheduledAt;
+        var existingEnd = s.ScheduledAt.AddMinutes(s.DurationMinutes);
+
+        return newStart < existingEnd && newEnd > existingStart;
+    });
+
+    if (isClashing)
+{
+    errorMessage = "⚠️ This time slot is already booked!";
+    return;
+}
+
+    // ✅ NO CLASH → CREATE
+    await ChatService.CreateSessionAsync(
+        EnrollmentId,
+        newSessionTitle,
+        string.IsNullOrEmpty(newSessionLink) ? null : newSessionLink,
+        newSessionDate,
+        durationMinutes
+    );
+    errorMessage = "";
+    newSessionTitle = "";
+    newSessionLink = "";
+    newSessionDate = DateTime.Now.AddDays(1);
+
+    sessions = await ChatService.GetSessionsAsync(EnrollmentId);
+    StateHasChanged();
+}
 
     private async Task MarkAtt(int sessionId, string status)
     {

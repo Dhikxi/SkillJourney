@@ -1,13 +1,14 @@
 ﻿@rendermode InteractiveServer
 @page "/register-tutor"
-
+@inject IWebHostEnvironment Env
 @using MqubeSkill.Models
 @using MqubeSkill.Services
 @using MqubeSkill.Data
 @using Microsoft.EntityFrameworkCore
-
+@using Microsoft.AspNetCore.Components.Forms
 @inject IDbContextFactory<MQubeDbContext> DbContextFactory
 @inject AuthService AuthService
+@inject EmailService EmailService
 @inject NavigationManager Nav
 
 <section class="inner-hero">
@@ -45,6 +46,15 @@
                                    class="form-control"
                                    @bind-Value="model.User.Email" />
                         <ValidationMessage For="@(() => model.User.Email)" />
+                        <InputText class="form-control mt-2"
+                                   placeholder="Enter OTP"
+                                   @bind-Value="enteredOtp" />
+
+                        <button type="button"
+                                class="btn btn-primary mt-2"
+                                @onclick="SendOtp">
+                            Send OTP
+                        </button>
                     </div>
 
                     <div class="col-md-6">
@@ -180,25 +190,19 @@
 
                     <div class="col-md-4">
                         <label>Resume *</label>
-                        <InputText class="form-control"
-                                   placeholder="resume.pdf"
-                                   @bind-Value="model.Tutor.ResumePath" />
+                        <InputFile OnChange="HandleResumeUpload" class="form-control" />
                         <ValidationMessage For="@(() => model.Tutor.ResumePath)" />
                     </div>
 
                     <div class="col-md-4">
                         <label>Identity Proof *</label>
-                        <InputText class="form-control"
-                                   placeholder="aadhaar.pdf"
-                                   @bind-Value="model.Tutor.IdentityProofPath" />
+                        <InputFile OnChange="HandleIdentityUpload" class="form-control" />
                         <ValidationMessage For="@(() => model.Tutor.IdentityProofPath)" />
                     </div>
 
                     <div class="col-md-4">
                         <label>Highest Degree *</label>
-                        <InputText class="form-control"
-                                   placeholder="degree.pdf"
-                                   @bind-Value="model.Tutor.DegreePath" />
+                        <InputFile OnChange="HandleDegreeUpload" class="form-control" />
                         <ValidationMessage For="@(() => model.Tutor.DegreePath)" />
                     </div>
 
@@ -259,12 +263,19 @@
 
     private RegisterTutorViewModel model = new();
     private string? message;
+    private string generatedOtp = "";
+    private string enteredOtp = "";
 
     private async Task HandleRegister()
     {
         try
         {
             model.User.Role = "Tutor";
+            if (enteredOtp != generatedOtp)
+            {
+                message = "Invalid OTP";
+                return;
+            }
 
             var createdUser = await AuthService.Register(model.User);
 
@@ -290,5 +301,88 @@
         {
             message = ex.InnerException?.Message ?? ex.Message;
         }
+    }
+    private async Task HandleResumeUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+            return;
+
+        // 1. Create uploads folder path
+        var folderPath = Path.Combine(Env.WebRootPath, "uploads");
+
+        // 2. Create folder if not exists
+        if (!Directory.Exists(folderPath))
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+
+        // 3. Create unique file name
+        var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.Name);
+
+        // 4. Full file path
+        var filePath = Path.Combine(folderPath, fileName);
+
+        // 5. Save file
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.OpenReadStream().CopyToAsync(stream);
+        }
+
+        // 6. Save path to DB model
+        model.Tutor.ResumePath = "/uploads/" + fileName;
+    }
+    private async Task HandleIdentityUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        var folderPath = Path.Combine(Env.WebRootPath, "uploads");
+
+        if (!Directory.Exists(folderPath))
+            Directory.CreateDirectory(folderPath);
+
+        var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.Name);
+        var filePath = Path.Combine(folderPath, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.OpenReadStream().CopyToAsync(stream);
+        }
+
+        model.Tutor.IdentityProofPath = "/uploads/" + fileName;
+    }
+    private async Task HandleDegreeUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        var folderPath = Path.Combine(Env.WebRootPath, "uploads");
+        if (!Directory.Exists(folderPath))
+            Directory.CreateDirectory(folderPath);
+
+        var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.Name);
+        var filePath = Path.Combine(folderPath, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.OpenReadStream().CopyToAsync(stream);
+        }
+
+        model.Tutor.DegreePath = "/uploads/" + fileName;
+    }
+
+    private async Task SendOtp()
+    {
+        if (string.IsNullOrWhiteSpace(model.User.Email))
+        {
+            message = "Enter email first.";
+            return;
+        }
+
+        generatedOtp = await AuthService.SendOtp(model.User.Email);
+
+        message = "OTP sent to your email.";
     }
 }

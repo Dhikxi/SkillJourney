@@ -80,14 +80,40 @@
             Nav.NavigateTo("/student-dashboard?payment=already");
             return;
         }
+        var tutor = await Db.Tutors
+    .FirstOrDefaultAsync(t => t.TutorId == TutorId);
 
-        var payment = new MqubeSkill.Models.Payment
+        // 🔥 calculate correct amount AGAIN (same logic as payment page)
+        var bookings = await Db.DemoBookings
+            .Where(d => d.TutorId == TutorId &&
+                        d.StudentId == student.StudentId &&
+                        d.Status != null &&
+                        d.Status != "Rejected")
+            .ToListAsync();
+
+        int totalSlots = 0;
+
+        foreach (var b in bookings)
+        {
+            if (!string.IsNullOrEmpty(b.SelectedSlot))
+                totalSlots++;
+
+            if (!string.IsNullOrEmpty(b.SelectedSlot2))
+                totalSlots++;
+        }
+
+        decimal amount = (tutor != null ? tutor.FeePerHour : 0) * totalSlots;
+
+
+        // ✅ NOW SAVE CORRECT AMOUNT
+        var payment = new Payment
         {
             TutorId = TutorId,
             StudentId = student.StudentId,
             ScreenshotPath = savedPath,
             PaymentDate = DateTime.Now,
-            Status = "Pending"
+            Status = "Pending",
+            Amount = amount
         };
 
         Db.Payments.Add(payment);
